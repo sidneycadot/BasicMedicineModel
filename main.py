@@ -2,11 +2,10 @@
 
 import re
 import sys
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QLineEdit
+from PySide6.QtGui import QPalette, QColor
+from PySide6.QtWidgets import QApplication, QWidget, QLineEdit
 from matplotlib.backends.backend_qtagg import FigureCanvas
 from matplotlib.figure import Figure
 
@@ -21,12 +20,42 @@ class SimulationSettings(NamedTuple):
     graph_start_time: float         # graph start time, in DAYS (24 hours)
     graph_end_time: float           # graph end time, in DAYS (24 hours)
 
+FloatPattern = "(?:[0-9]+(?:[.][0-9]+)?)"
+float_pattern = re.compile(f"{FloatPattern}")
+
+def parse_and_validate_float(s: str, validate_func) -> Optional[float]:
+    if float_pattern.fullmatch(s) is not None:
+        value = float(s)
+        if validate_func(value):
+            return value
+    return None
+
+float_list_pattern = re.compile(f"(?:(?:)|(?:{FloatPattern})|(?:{FloatPattern}(?:[-]{FloatPattern})*))")
+
+def parse_and_validate_float_list(s: str, validate_func) -> Optional[list[float]]:
+    if float_list_pattern.fullmatch(s) is not None:
+        if len(s) == 0:
+            value = []
+        else:
+            value = [float(x) for x in s.split("-")]
+        if validate_func(value):
+            return value
+    return None
+
+def set_widget_background_color(widget, color) -> None:
+    palette = widget.palette()
+    palette.setColor(QPalette.Base, color)
+    widget.setPalette(palette)
+
+
 class CentralWidget(QWidget):
+
+    color_good = QColor("#ccffcc")
+    color_bad = QColor("#ffcccc")
+
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Basic Medicine Model")
-
-        maak_grafiek_button = QPushButton("Maak grafiek")
+        self.setWindowTitle("Basic Medicine Halflife Model")
 
         fig = Figure()
         self.axes = fig.add_axes(rect=(0.12, 0.12, 0.82, 0.82))
@@ -40,29 +69,31 @@ class CentralWidget(QWidget):
         self.halflife_widget = QLineEdit("160.0")
         self.start_amount_widget = QLineEdit("0.0")
         self.startup_dosages_widget = QLineEdit("4")
-        self.repeat_dosages_widget = QLineEdit("1,2")
-        self.graph_starttime_widget = QLineEdit("0")
-        self.graph_endtime_widget = QLineEdit("30")
-        self.halflife_widget.setMinimumWidth(60)
+        self.repeat_dosages_widget = QLineEdit("1-2")
+        self.graph_start_time_widget = QLineEdit("0")
+        self.graph_end_time_widget = QLineEdit("30")
+
+        self.halflife_widget.setToolTip("Acenocoumarol: 8 tot 11 uur\nWarfarine: 40 uur\nFenprocoumon: 160 uur")
+
+        edit_widgets = (self.halflife_widget, self.start_amount_widget, self.startup_dosages_widget, self.repeat_dosages_widget,
+                        self.graph_start_time_widget, self.graph_end_time_widget)
+
+        for widget in edit_widgets:
+            widget.setMinimumWidth(60)
+            widget.setMaximumWidth(120)
+            widget.textEdited.connect(self.validate_settings_and_update_graph_if_ok)
 
         layout = vbox_layout(
-            groupbox("Invoervelden",
-                 hbox_layout(
-                     "*stretch*",
-                    grid_layout(
-                        ["Halfwaardetijd medicijn", self.halflife_widget, "uren"],
-                        ["Hoeveelheid medicijn voor eerste inname", self.start_amount_widget, "eenheden"],
-                        ["Opstart-doseringen", self.startup_dosages_widget, "eenheden"],
-                        ["Herhaal-doseringen", self.repeat_dosages_widget, "eenheden"],
-                        ["Grafiek start-tijd", self.graph_starttime_widget, "etmalen"],
-                        ["Grafiek eind-tijd", self.graph_endtime_widget, "etmalen"]
-                    ),
-                    "*stretch*"
+             hbox_layout(
+                 "*stretch*",
+                grid_layout(
+                    ["Halfwaardetijd medicijn", self.halflife_widget, "uren"],
+                    ["Hoeveelheid medicijn in lichaam voor eerste inname", self.start_amount_widget, "eenheden"],
+                    ["Opstart-doseringen", self.startup_dosages_widget, "eenheden"],
+                    ["Herhaal-doseringen", self.repeat_dosages_widget, "eenheden"],
+                    ["Grafiek start-tijd", self.graph_start_time_widget, "etmalen"],
+                    ["Grafiek eind-tijd", self.graph_end_time_widget, "etmalen"]
                 ),
-            ),
-            hbox_layout(
-               "*stretch*",
-                maak_grafiek_button,
                 "*stretch*"
             ),
             self.grafiek_canvas
@@ -70,44 +101,40 @@ class CentralWidget(QWidget):
 
         self.setLayout(layout)
 
-        maak_grafiek_button.clicked.connect(self.check_settings_and_update)
+        self.validate_settings_and_update_graph_if_ok()
 
-        self.check_settings_and_update()
+    def validate_settings_and_update_graph_if_ok(self):
 
-    def check_settings_and_update(self):
+        halflife = parse_and_validate_float(self.halflife_widget.text(), lambda x: x > 0.0)
+        start_amount = parse_and_validate_float(self.start_amount_widget.text(), lambda x: x >= 0.0)
+        startup_dosages = parse_and_validate_float_list(self.startup_dosages_widget.text(), lambda xlist: all(x >= 0.0 for x in xlist))
+        repeat_dosages = parse_and_validate_float_list(self.repeat_dosages_widget.text(), lambda xlist: all(x >= 0.0 for x in xlist))
+        graph_start_time = parse_and_validate_float(self.graph_start_time_widget.text(), lambda x: x >= 0.0)
+        graph_end_time = parse_and_validate_float(self.graph_end_time_widget.text(), lambda x: x >= 0.0)
 
-        float_pattern = re.compile("[0-9]+([.][0-9]+)?")
+        if (graph_start_time is not None) and (graph_end_time is not None):
+            if not (graph_start_time < graph_end_time):
+                graph_start_time = None
+                graph_end_time = None
 
-        halflife_value = None
-        halflife_text = self.halflife_widget.text()
-        if float_pattern.fullmatch(halflife_text) is not None:
-            value = float(halflife_text)
-            if 0.0 < value <= 10000.0:
-                halflife_value = value
+        set_widget_background_color(self.halflife_widget, self.color_good if halflife is not None else self.color_bad)
+        set_widget_background_color(self.start_amount_widget, self.color_good if start_amount is not None else self.color_bad)
+        set_widget_background_color(self.startup_dosages_widget, self.color_good if startup_dosages is not None else self.color_bad)
+        set_widget_background_color(self.repeat_dosages_widget, self.color_good if repeat_dosages is not None else self.color_bad)
+        set_widget_background_color(self.graph_start_time_widget, self.color_good if graph_start_time is not None else self.color_bad)
+        set_widget_background_color(self.graph_end_time_widget, self.color_good if graph_end_time is not None else self.color_bad)
 
-        error = False
-
-        if halflife_value is not None:
-            palette = self.halflife_widget.palette()
-            palette.setColor(QPalette.Base, Qt.green)
-            self.halflife_widget.setPalette(palette)
-        else:
-            error = True
-            palette = self.halflife_widget.palette()
-            palette.setColor(QPalette.Base, Qt.red)
-            self.halflife_widget.setPalette(palette)
-
-        # If any error occured, bail out.
-        if error:
+        if any(x is None for x in (halflife, start_amount, startup_dosages, repeat_dosages, graph_start_time, graph_end_time)):
+            # If any value is None, bail out.
             return
 
         settings = SimulationSettings(
-            halflife = halflife_value,
-            start_amount = 0.0,
-            startup_dosages = [4.0, 2.0, 1.0],
-            repeat_dosages = [1.0, 0.5],
-            graph_start_time = 0.0,
-            graph_end_time = 25.0
+            halflife = halflife,
+            start_amount = start_amount,
+            startup_dosages = startup_dosages,
+            repeat_dosages = repeat_dosages,
+            graph_start_time = graph_start_time,
+            graph_end_time = graph_end_time
         )
 
         self.update_graph(settings)
@@ -128,7 +155,7 @@ class CentralWidget(QWidget):
         decay_factor = 0.5 ** (1.0 / halflife_minutes)
 
         amount = settings.start_amount
-        for t in range(t1, t2 + 1):
+        for t in range(0, t2 + 1):
             if t % 1440 == 0:
                 index = t // 1440
                 if index < len(startup_dosages):
