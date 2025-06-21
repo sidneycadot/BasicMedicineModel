@@ -1,10 +1,11 @@
 #! /usr/bin/env python3
 
+import re
 import sys
 from typing import NamedTuple
 
-from PySide6.QtCore import QRegularExpression
-from PySide6.QtGui import QRegularExpressionValidator
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QLineEdit
 from matplotlib.backends.backend_qtagg import FigureCanvas
 from matplotlib.figure import Figure
@@ -28,7 +29,7 @@ class CentralWidget(QWidget):
         maak_grafiek_button = QPushButton("Maak grafiek")
 
         fig = Figure()
-        self.axes = fig.add_axes(rect=(0.18, 0.12, 0.76, 0.82))
+        self.axes = fig.add_axes(rect=(0.12, 0.12, 0.82, 0.82))
         (self.graph_plotline,) = self.axes.plot([], [])
         self.axes.set_xlabel("tijd [etmalen]")
         self.axes.set_ylabel("hoeveelheid medicijn in lichaam [eenheden]")
@@ -45,23 +46,26 @@ class CentralWidget(QWidget):
         self.halflife_widget.setMinimumWidth(60)
 
         layout = vbox_layout(
-            hbox_layout(
-                vbox_layout(
-                    groupbox("Invoervelden",
-                        grid_layout(
-                            ["Halfwaardetijd medicijn", self.halflife_widget, "uren"],
-                            ["Hoeveelheid medicijn voor eerste inname", self.start_amount_widget, "eenheden"],
-                            ["Opstart-doseringen", self.startup_dosages_widget, "eenheden"],
-                            ["Herhaal-doseringen", self.repeat_dosages_widget, "eenheden"],
-                            ["Grafiek start-tijd", self.graph_starttime_widget, "etmalen"],
-                            ["Grafiek eind-tijd", self.graph_endtime_widget, "etmalen"]
-                        )
+            groupbox("Invoervelden",
+                 hbox_layout(
+                     "*stretch*",
+                    grid_layout(
+                        ["Halfwaardetijd medicijn", self.halflife_widget, "uren"],
+                        ["Hoeveelheid medicijn voor eerste inname", self.start_amount_widget, "eenheden"],
+                        ["Opstart-doseringen", self.startup_dosages_widget, "eenheden"],
+                        ["Herhaal-doseringen", self.repeat_dosages_widget, "eenheden"],
+                        ["Grafiek start-tijd", self.graph_starttime_widget, "etmalen"],
+                        ["Grafiek eind-tijd", self.graph_endtime_widget, "etmalen"]
                     ),
-                    maak_grafiek_button,
                     "*stretch*"
                 ),
-                self.grafiek_canvas
-            )
+            ),
+            hbox_layout(
+               "*stretch*",
+                maak_grafiek_button,
+                "*stretch*"
+            ),
+            self.grafiek_canvas
         )
 
         self.setLayout(layout)
@@ -72,8 +76,33 @@ class CentralWidget(QWidget):
 
     def check_settings_and_update(self):
 
+        float_pattern = re.compile("[0-9]+([.][0-9]+)?")
+
+        halflife_value = None
+        halflife_text = self.halflife_widget.text()
+        if float_pattern.fullmatch(halflife_text) is not None:
+            value = float(halflife_text)
+            if 0.0 < value <= 10000.0:
+                halflife_value = value
+
+        error = False
+
+        if halflife_value is not None:
+            palette = self.halflife_widget.palette()
+            palette.setColor(QPalette.Base, Qt.green)
+            self.halflife_widget.setPalette(palette)
+        else:
+            error = True
+            palette = self.halflife_widget.palette()
+            palette.setColor(QPalette.Base, Qt.red)
+            self.halflife_widget.setPalette(palette)
+
+        # If any error occured, bail out.
+        if error:
+            return
+
         settings = SimulationSettings(
-            halflife = 160.0,
+            halflife = halflife_value,
             start_amount = 0.0,
             startup_dosages = [4.0, 2.0, 1.0],
             repeat_dosages = [1.0, 0.5],
