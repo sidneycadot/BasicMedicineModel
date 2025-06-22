@@ -20,8 +20,11 @@ class SimulationSettings(NamedTuple):
     graph_start_time: float         # graph start time, in DAYS (24 hours)
     graph_end_time: float           # graph end time, in DAYS (24 hours)
 
-FloatPattern = "(?:[0-9]+(?:[.][0-9]+)?)"
-float_pattern = re.compile(f"{FloatPattern}")
+
+Float = "(?:[0-9]+(?:[.][0-9]+)?)"
+float_pattern = re.compile(f"{Float}")
+float_list_pattern = re.compile(f"(?:(?:)|(?:{Float})|(?:{Float}(?:[-]{Float})*))")
+
 
 def parse_and_validate_float(s: str, validate_func) -> Optional[float]:
     if float_pattern.fullmatch(s) is not None:
@@ -30,7 +33,6 @@ def parse_and_validate_float(s: str, validate_func) -> Optional[float]:
             return value
     return None
 
-float_list_pattern = re.compile(f"(?:(?:)|(?:{FloatPattern})|(?:{FloatPattern}(?:[-]{FloatPattern})*))")
 
 def parse_and_validate_float_list(s: str, validate_func) -> Optional[list[float]]:
     if float_list_pattern.fullmatch(s) is not None:
@@ -41,6 +43,7 @@ def parse_and_validate_float_list(s: str, validate_func) -> Optional[list[float]
         if validate_func(value):
             return value
     return None
+
 
 def set_widget_background_color(widget, color) -> None:
     palette = widget.palette()
@@ -64,19 +67,25 @@ class CentralWidget(QWidget):
         self.axes.set_ylabel("hoeveelheid medicijn in lichaam [eenheden]")
         self.axes.grid()
 
-        self.grafiek_canvas = FigureCanvas(fig)
+        self.plot_canvas = FigureCanvas(fig)
 
-        self.halflife_widget = QLineEdit("160.0")
-        self.start_amount_widget = QLineEdit("0.0")
+        self.halflife_widget = QLineEdit("160")
+        self.start_amount_widget = QLineEdit("0")
         self.startup_dosages_widget = QLineEdit("4")
         self.repeat_dosages_widget = QLineEdit("1-2")
         self.graph_start_time_widget = QLineEdit("0")
         self.graph_end_time_widget = QLineEdit("30")
 
-        self.halflife_widget.setToolTip("Acenocoumarol: 8 tot 11 uur\nWarfarine: 40 uur\nFenprocoumon: 160 uur")
+        self.halflife_widget.setToolTip("Acenocoumarol: 8 tot 11 uur\n"
+                                        "Warfarine: 40 uur\n"
+                                        "Fenprocoumon: 160 uur")
 
-        edit_widgets = (self.halflife_widget, self.start_amount_widget, self.startup_dosages_widget, self.repeat_dosages_widget,
-                        self.graph_start_time_widget, self.graph_end_time_widget)
+        edit_widgets = (self.halflife_widget,
+                        self.start_amount_widget,
+                        self.startup_dosages_widget,
+                        self.repeat_dosages_widget,
+                        self.graph_start_time_widget,
+                        self.graph_end_time_widget)
 
         for widget in edit_widgets:
             widget.setMinimumWidth(60)
@@ -84,8 +93,8 @@ class CentralWidget(QWidget):
             widget.textEdited.connect(self.validate_settings_and_update_graph_if_ok)
 
         layout = vbox_layout(
-             hbox_layout(
-                 "*stretch*",
+            hbox_layout(
+                "*stretch*",
                 grid_layout(
                     ["Halfwaardetijd medicijn", self.halflife_widget, "uren"],
                     ["Hoeveelheid medicijn in lichaam voor eerste inname", self.start_amount_widget, "eenheden"],
@@ -96,7 +105,7 @@ class CentralWidget(QWidget):
                 ),
                 "*stretch*"
             ),
-            self.grafiek_canvas
+            self.plot_canvas
         )
 
         self.setLayout(layout)
@@ -110,7 +119,7 @@ class CentralWidget(QWidget):
         startup_dosages = parse_and_validate_float_list(self.startup_dosages_widget.text(), lambda xlist: all(x >= 0.0 for x in xlist))
         repeat_dosages = parse_and_validate_float_list(self.repeat_dosages_widget.text(), lambda xlist: all(x >= 0.0 for x in xlist))
         graph_start_time = parse_and_validate_float(self.graph_start_time_widget.text(), lambda x: x >= 0.0)
-        graph_end_time = parse_and_validate_float(self.graph_end_time_widget.text(), lambda x: x >= 0.0)
+        graph_end_time = parse_and_validate_float(self.graph_end_time_widget.text(), lambda x: 0.0 <= x <= 100.0)
 
         if (graph_start_time is not None) and (graph_end_time is not None):
             if not (graph_start_time < graph_end_time):
@@ -177,7 +186,7 @@ class CentralWidget(QWidget):
         self.graph_plotline.set_data(x, y)
         self.axes.relim()
         self.axes.autoscale()
-        self.grafiek_canvas.draw_idle()
+        self.plot_canvas.draw_idle()
 
 
 def main():
@@ -186,6 +195,7 @@ def main():
     widget.show()
     exitcode = app.exec()
     sys.exit(exitcode)
+
 
 if __name__ == "__main__":
     main()
