@@ -4,10 +4,14 @@ import re
 import sys
 from typing import NamedTuple, Optional
 
-from PySide6.QtGui import QPalette, QColor
-from PySide6.QtWidgets import QApplication, QWidget, QLineEdit
+import numpy as np
+
 from matplotlib.backends.backend_qtagg import FigureCanvas
 from matplotlib.figure import Figure
+
+from PySide6.QtGui import QPalette, QColor
+from PySide6.QtWidgets import QApplication, QWidget, QLineEdit
+
 
 from layout_utilities import grid_layout, vbox_layout, hbox_layout, groupbox
 
@@ -20,10 +24,20 @@ class SimulationSettings(NamedTuple):
     graph_start_time: float         # graph start time, in DAYS (24 hours)
     graph_end_time: float           # graph end time, in DAYS (24 hours)
 
+    def equilibrium(self):
+        """Gemiddelde hoeveelheid werkzame stof in lichaam na bereiken evenwicht."""
+        if len(self.repeat_dosages) == 0:
+            return 0.0
+        return (self.halflife / 24) / np.log(2) * np.mean(self.repeat_dosages)
 
-Float = "(?:[0-9]+(?:[.][0-9]+)?)"
-float_pattern = re.compile(f"{Float}")
-float_list_pattern = re.compile(f"(?:(?:)|(?:{Float})|(?:{Float}(?:[-]{Float})*))")
+DecimalDigit = "(?:[0-9]+)"
+NonEmptyDecimalDigitSequence = f"(?:{DecimalDigit}+)"
+Float = f"(?:{NonEmptyDecimalDigitSequence}(?:[.]{NonEmptyDecimalDigitSequence})?)"
+NonEmptyFloatList = f"(?:{Float}(?:[-]{Float})*)"
+PossiblyEmptyFloatList = f"(?:{NonEmptyFloatList}?)"
+
+float_pattern = re.compile(Float)
+float_list_pattern = re.compile(PossiblyEmptyFloatList)
 
 
 def parse_and_validate_float(s: str, validate_func) -> Optional[float]:
@@ -32,6 +46,12 @@ def parse_and_validate_float(s: str, validate_func) -> Optional[float]:
         if validate_func(value):
             return value
     return None
+
+
+def fmt(x: int|float) -> str:
+    if x.is_integer():
+        x = int(x)
+    return str(x)
 
 
 def parse_and_validate_float_list(s: str, validate_func) -> Optional[list[float]]:
@@ -60,14 +80,15 @@ class CentralWidget(QWidget):
         super().__init__()
         self.setWindowTitle("Basic Medicine Halflife Model")
 
-        fig = Figure()
-        self.axes = fig.add_axes(rect=(0.12, 0.12, 0.82, 0.82))
+        self.fig = Figure()
+        self.axes = self.fig.add_axes(rect=(0.12, 0.12, 0.82, 0.60))
         (self.graph_plotline,) = self.axes.plot([], [])
         self.axes.set_xlabel("tijd [etmalen]")
+        self.hline = self.axes.axhline(np.nan, c='m')
         self.axes.set_ylabel("hoeveelheid medicijn in lichaam [eenheden]")
         self.axes.grid()
 
-        self.plot_canvas = FigureCanvas(fig)
+        self.plot_canvas = FigureCanvas(self.fig)
 
         self.halflife_widget = QLineEdit("160")
         self.start_amount_widget = QLineEdit("0")
@@ -98,8 +119,8 @@ class CentralWidget(QWidget):
                 grid_layout(
                     ["Halfwaardetijd medicijn", self.halflife_widget, "uren"],
                     ["Hoeveelheid medicijn in lichaam voor eerste inname", self.start_amount_widget, "eenheden"],
-                    ["Opstart-doseringen", self.startup_dosages_widget, "eenheden"],
-                    ["Herhaal-doseringen", self.repeat_dosages_widget, "eenheden"],
+                    ["Opstart-doseringen", self.startup_dosages_widget, "eenheden per etmaal"],
+                    ["Herhaal-doseringen", self.repeat_dosages_widget, "eenheden per etmaal"],
                     ["Grafiek start-tijd", self.graph_start_time_widget, "etmalen"],
                     ["Grafiek eind-tijd", self.graph_end_time_widget, "etmalen"]
                 ),
@@ -158,12 +179,18 @@ class CentralWidget(QWidget):
 
         halflife_minutes = settings.halflife * 60.0
 
+        # The decay factor per minute.
+        decay_factor = 0.5 ** (1.0 / halflife_minutes)
+
         x = []
         y = []
 
-        decay_factor = 0.5 ** (1.0 / halflife_minutes)
-
         amount = settings.start_amount
+
+        if 0 >= t1:
+            x.append(0.0)
+            y.append(settings.start_amount)
+
         for t in range(0, t2 + 1):
             if t % 1440 == 0:
                 index = t // 1440
@@ -182,6 +209,24 @@ class CentralWidget(QWidget):
             if t >= t1:
                 x.append(t / 1440.0)
                 y.append(amount)
+
+        x = np.asarray(x)
+        y = np.asarray(y)
+
+        #print("@@@", equilibrium, np.mean(y[-1440*len(repeat_dosages):]), np.std(y[-1440*len(repeat_dosages):]))
+
+        title = "\n".join((
+            f"halfwaardetijd medicijn: {fmt(settings.halflife)} uur",
+            f"beginhoeveelheid: {fmt(settings.start_amount)} eenheden",
+            f"dosering: start [{"‒".join(fmt(x) for x in settings.startup_dosages)}], "
+            f"herhaal [{"‒".join(fmt(x) for x in settings.repeat_dosages)}] eenheden per etmaal",
+            f"uiteindelijke gemiddelde hoeveelheid in lichaam: {settings.equilibrium():.3f} eenheden"
+            "", ""
+        ))
+
+        self.axes.set_title(title, fontsize=10.0)
+
+        self.hline.set_ydata([settings.equilibrium()])
 
         self.graph_plotline.set_data(x, y)
         self.axes.relim()
