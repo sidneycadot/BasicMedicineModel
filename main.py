@@ -5,40 +5,30 @@ import sys
 from typing import NamedTuple, Optional
 
 import numpy as np
-from PySide6.QtCore import Qt
 
 from matplotlib.backends.backend_qtagg import FigureCanvas
 from matplotlib.figure import Figure
 
 from PySide6.QtGui import QPalette, QColor
-from PySide6.QtWidgets import QApplication, QWidget, QLineEdit, QMainWindow, QLabel
+from PySide6.QtWidgets import QApplication, QWidget, QLineEdit
+
 
 from layout_utilities import grid_layout, vbox_layout, hbox_layout, groupbox
 
 
-def mean_dosage(repeat_dosages: list[float]) -> float:
-    if len(repeat_dosages) == 0:
-        return 0.0
-    return sum(repeat_dosages) / len(repeat_dosages)
-
-
-def equilibrium_amount(repeat_dosages: list[float], halflife: float) -> float:
-    """Gemiddelde hoeveelheid werkzame stof in lichaam na bereiken evenwicht."""
-    return (halflife / 24) / np.log(2) * mean_dosage(repeat_dosages)
-
-
 class SimulationSettings(NamedTuple):
-    halflife: float               # halflife, in HOURS
-    start_amount: float           # start amount, in UNITS
-    startup_dosages: list[float]  # start dosages, in UNITS
-    repeat_dosages: list[float]   # repeat dosages, in UNITS
-    graph_start_time: float       # graph start time, in DAYS (24 hours)
-    graph_end_time: float         # graph end time, in DAYS (24 hours)
+    halflife: float                 # halflife, in HOURS
+    start_amount: float             # start amount, in UNITS
+    startup_dosages: list[float]    # start dosages, in UNITS
+    repeat_dosages: list[float]     # repeat dosages, in UNITS
+    graph_start_time: float         # graph start time, in DAYS (24 hours)
+    graph_end_time: float           # graph end time, in DAYS (24 hours)
 
     def equilibrium(self):
         """Gemiddelde hoeveelheid werkzame stof in lichaam na bereiken evenwicht."""
-        return equilibrium_amount(self.repeat_dosages, self.halflife)
-
+        if len(self.repeat_dosages) == 0:
+            return 0.0
+        return (self.halflife / 24) / np.log(2) * np.mean(self.repeat_dosages)
 
 DecimalDigit = "(?:[0-9]+)"
 NonEmptyDecimalDigitSequence = f"(?:{DecimalDigit}+)"
@@ -58,6 +48,12 @@ def parse_and_validate_float(s: str, validate_func) -> Optional[float]:
     return None
 
 
+def fmt(x: int|float) -> str:
+    if x.is_integer():
+        x = int(x)
+    return str(x)
+
+
 def parse_and_validate_float_list(s: str, validate_func) -> Optional[list[float]]:
     if float_list_pattern.fullmatch(s) is not None:
         if len(s) == 0:
@@ -75,35 +71,17 @@ def set_widget_background_color(widget, color) -> None:
     widget.setPalette(palette)
 
 
-def fmt(x: int|float) -> str:
-    """Format number as integer or float string."""
-    if x.is_integer():
-        return str(int(x))
-
-    s = f"{x:.3f}"
-    while s.endswith("0"):
-        s = s[:-1]
-    return s
-
-
-class PassiveLineEdit(QLineEdit):
-    def __init__(self):
-        super().__init__()
-        self.setReadOnly(True)
-        self.setAlignment(Qt.AlignCenter)
-
-
 class CentralWidget(QWidget):
 
     color_good = QColor("#ccffcc")
-    color_good_static = QColor("#eeeeff")
     color_bad = QColor("#ffcccc")
 
     def __init__(self):
         super().__init__()
+        self.setWindowTitle("Basic Medicine Halflife Model")
 
         self.fig = Figure()
-        self.axes = self.fig.add_axes(rect=(0.12, 0.12, 0.82, 0.82))
+        self.axes = self.fig.add_axes(rect=(0.12, 0.12, 0.82, 0.60))
         (self.graph_plotline,) = self.axes.plot([], [])
         self.axes.set_xlabel("tijd [etmalen]")
         self.hline = self.axes.axhline(np.nan, c='m')
@@ -119,9 +97,6 @@ class CentralWidget(QWidget):
         self.graph_start_time_widget = QLineEdit("0")
         self.graph_end_time_widget = QLineEdit("30")
 
-        self.repeat_dosages_mean_widget = PassiveLineEdit()
-        self.repeat_dosages_equilibrium_widget = PassiveLineEdit()
-
         self.halflife_widget.setToolTip("Acenocoumarol: 8 tot 11 uur\n"
                                         "Warfarine: 40 uur\n"
                                         "Fenprocoumon: 160 uur")
@@ -136,37 +111,29 @@ class CentralWidget(QWidget):
         for widget in edit_widgets:
             widget.setMinimumWidth(60)
             widget.setMaximumWidth(120)
-            widget.textEdited.connect(self.validate_settings_and_update_gui_if_ok)
+            widget.textEdited.connect(self.validate_settings_and_update_graph_if_ok)
 
         layout = vbox_layout(
-            "*stretch*",
             hbox_layout(
                 "*stretch*",
                 grid_layout(
-                    ["<b>Invoervelden</b>"],
-                    ["  Halfwaardetijd medicijn", self.halflife_widget, "uren"],
-                    ["  Hoeveelheid medicijn in lichaam voor eerste inname", self.start_amount_widget, "eenheden"],
-                    ["  Opstart-doseringen", self.startup_dosages_widget, "eenheden per etmaal"],
-                    ["  Herhaal-doseringen", self.repeat_dosages_widget, "eenheden per etmaal"],
-                    ["  Grafiek start-tijd", self.graph_start_time_widget, "etmalen"],
-                    ["  Grafiek eind-tijd", self.graph_end_time_widget, "etmalen"],
-                    [""],
-                    ["<b>Berekende waarden</b>"],
-                    ["  Gemiddelde herhaal-dosering", self.repeat_dosages_mean_widget, "eenheden per etmaal"],
-                    ["  Gemiddelde hoeveelheid medicijn in lichaam na inregelen", self.repeat_dosages_equilibrium_widget, "eenheden"],
-                    [""]
+                    ["Halfwaardetijd medicijn", self.halflife_widget, "uren"],
+                    ["Hoeveelheid medicijn in lichaam voor eerste inname", self.start_amount_widget, "eenheden"],
+                    ["Opstart-doseringen", self.startup_dosages_widget, "eenheden per etmaal"],
+                    ["Herhaal-doseringen", self.repeat_dosages_widget, "eenheden per etmaal"],
+                    ["Grafiek start-tijd", self.graph_start_time_widget, "etmalen"],
+                    ["Grafiek eind-tijd", self.graph_end_time_widget, "etmalen"]
                 ),
                 "*stretch*"
             ),
-            "*stretch*",
             self.plot_canvas
         )
 
         self.setLayout(layout)
 
-        self.validate_settings_and_update_gui_if_ok()
+        self.validate_settings_and_update_graph_if_ok()
 
-    def validate_settings_and_update_gui_if_ok(self):
+    def validate_settings_and_update_graph_if_ok(self):
 
         halflife = parse_and_validate_float(self.halflife_widget.text(), lambda x: x > 0.0)
         start_amount = parse_and_validate_float(self.start_amount_widget.text(), lambda x: x >= 0.0)
@@ -174,9 +141,6 @@ class CentralWidget(QWidget):
         repeat_dosages = parse_and_validate_float_list(self.repeat_dosages_widget.text(), lambda xlist: all(x >= 0.0 for x in xlist))
         graph_start_time = parse_and_validate_float(self.graph_start_time_widget.text(), lambda x: x >= 0.0)
         graph_end_time = parse_and_validate_float(self.graph_end_time_widget.text(), lambda x: 0.0 <= x <= 100.0)
-
-        repeat_dosage_mean = None if repeat_dosages is None else mean_dosage(repeat_dosages)
-        repeat_dosage_equilibrium = None if repeat_dosages is None or halflife is None else equilibrium_amount(repeat_dosages, halflife)
 
         if (graph_start_time is not None) and (graph_end_time is not None):
             if not (graph_start_time < graph_end_time):
@@ -190,23 +154,20 @@ class CentralWidget(QWidget):
         set_widget_background_color(self.graph_start_time_widget, self.color_good if graph_start_time is not None else self.color_bad)
         set_widget_background_color(self.graph_end_time_widget, self.color_good if graph_end_time is not None else self.color_bad)
 
-        set_widget_background_color(self.repeat_dosages_mean_widget, self.color_good_static if repeat_dosage_mean is not None else self.color_bad)
-        set_widget_background_color(self.repeat_dosages_equilibrium_widget, self.color_good_static if repeat_dosage_equilibrium is not None else self.color_bad)
+        if any(x is None for x in (halflife, start_amount, startup_dosages, repeat_dosages, graph_start_time, graph_end_time)):
+            # If any value is None, bail out.
+            return
 
-        self.repeat_dosages_mean_widget.setText(f"{fmt(repeat_dosage_mean)}" if repeat_dosage_mean is not None else "")
-        self.repeat_dosages_equilibrium_widget.setText(f"{fmt(repeat_dosage_equilibrium)}" if repeat_dosage_equilibrium is not None else "")
+        settings = SimulationSettings(
+            halflife = halflife,
+            start_amount = start_amount,
+            startup_dosages = startup_dosages,
+            repeat_dosages = repeat_dosages,
+            graph_start_time = graph_start_time,
+            graph_end_time = graph_end_time
+        )
 
-        if all(x is not None for x in (halflife, start_amount, startup_dosages, repeat_dosages, graph_start_time, graph_end_time)):
-            settings = SimulationSettings(
-                halflife = halflife,
-                start_amount = start_amount,
-                startup_dosages = startup_dosages,
-                repeat_dosages = repeat_dosages,
-                graph_start_time = graph_start_time,
-                graph_end_time = graph_end_time
-            )
-
-            self.update_graph(settings)
+        self.update_graph(settings)
 
     def update_graph(self, settings: SimulationSettings):
 
@@ -252,40 +213,33 @@ class CentralWidget(QWidget):
         x = np.asarray(x)
         y = np.asarray(y)
 
-        equilibrium = settings.equilibrium()
+        #print("@@@", equilibrium, np.mean(y[-1440*len(repeat_dosages):]), np.std(y[-1440*len(repeat_dosages):]))
 
-        self.hline.set_ydata([equilibrium])
+        title = "\n".join((
+            f"halfwaardetijd medicijn: {fmt(settings.halflife)} uur",
+            f"beginhoeveelheid: {fmt(settings.start_amount)} eenheden",
+            f"dosering: start [{"‒".join(fmt(x) for x in settings.startup_dosages)}], "
+            f"herhaal [{"‒".join(fmt(x) for x in settings.repeat_dosages)}] eenheden per etmaal",
+            f"uiteindelijke gemiddelde hoeveelheid in lichaam: {settings.equilibrium():.3f} eenheden"
+            "", ""
+        ))
+
+        self.axes.set_title(title, fontsize=10.0)
+
+        self.hline.set_ydata([settings.equilibrium()])
 
         self.graph_plotline.set_data(x, y)
         self.axes.relim()
         self.axes.autoscale()
-        self.axes.set_ylim(0.0, np.ceil(max(np.amax(y), equilibrium) + 0.5))
         self.plot_canvas.draw_idle()
 
 
-class MainWindow(QMainWindow):
-
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Basic Medicine Halflife Model")
-
-        central_widget = CentralWidget()
-        self.setCentralWidget(central_widget)
-
-
-class Application(QApplication):
-    def __init__(self):
-        super().__init__()
-        window = MainWindow()
-        window.show()
-        self.window = window
-
-
 def main():
-    app = Application()
+    app = QApplication(sys.argv)
+    widget = CentralWidget()
+    widget.show()
     exitcode = app.exec()
-    if exitcode != 0:
-        sys.exit(exitcode)
+    sys.exit(exitcode)
 
 
 if __name__ == "__main__":
