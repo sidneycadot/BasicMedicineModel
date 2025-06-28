@@ -113,7 +113,7 @@ class CentralWidget(QWidget):
         self.validate_settings_and_update_graph_if_ok()
 
     def validate_settings_and_update_graph_if_ok(self):
-
+        """Validate settings, then update graph if the settings are ok."""
         halflife = parse_and_validate_float(self.halflife_widget.text(), lambda x: x > 0.0)
         start_amount = parse_and_validate_float(self.start_amount_widget.text(), lambda x: x >= 0.0)
         startup_dosages = parse_and_validate_float_list(self.startup_dosages_widget.text(), lambda xlist: all(x >= 0.0 for x in xlist))
@@ -133,10 +133,6 @@ class CentralWidget(QWidget):
         set_widget_background_color(self.graph_start_time_widget, self.color_good if graph_start_time is not None else self.color_bad)
         set_widget_background_color(self.graph_end_time_widget, self.color_good if graph_end_time is not None else self.color_bad)
 
-        if any(x is None for x in (halflife, start_amount, startup_dosages, repeat_dosages, graph_start_time, graph_end_time)):
-            # If any value is None, bail out.
-            return
-
         settings = SimulationSettings(
             halflife = halflife,
             start_amount = start_amount,
@@ -146,12 +142,19 @@ class CentralWidget(QWidget):
             graph_end_time = graph_end_time
         )
 
+        if any(x is None for x in settings):
+            # If any value is None, bail out.
+            return
+
         self.update_graph(settings)
 
     def update_graph(self, settings: SimulationSettings):
+        """Simulate according to settings, then update the graph."""
 
-        t1 = round(settings.graph_start_time * 1440.0)
-        t2 = round(settings.graph_end_time * 1440.0)
+        MINUTES_PER_24_HOURS = 1440
+
+        t1 = round(settings.graph_start_time * MINUTES_PER_24_HOURS)
+        t2 = round(settings.graph_end_time * MINUTES_PER_24_HOURS)
 
         startup_dosages = settings.startup_dosages
         repeat_dosages = settings.repeat_dosages
@@ -163,10 +166,13 @@ class CentralWidget(QWidget):
 
         decay_factor = 0.5 ** (1.0 / halflife_minutes)
 
+        # Initialize starting amount.
         amount = settings.start_amount
+
+        # Simulate from t=0 up to and including t2.
         for t in range(0, t2 + 1):
-            if t % 1440 == 0:
-                index = t // 1440
+            if t % MINUTES_PER_24_HOURS == 0:
+                index = t // MINUTES_PER_24_HOURS
                 if index < len(startup_dosages):
                     dose = startup_dosages[index]
                 elif len(repeat_dosages) != 0:
@@ -177,10 +183,11 @@ class CentralWidget(QWidget):
             else:
                 dose = 0.0
 
+            # Simulate time step.
             amount = decay_factor * amount + dose
 
             if t >= t1:
-                x.append(t / 1440.0)
+                x.append(t / MINUTES_PER_24_HOURS)
                 y.append(amount)
 
         self.graph_plotline.set_data(x, y)
