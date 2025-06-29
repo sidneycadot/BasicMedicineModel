@@ -72,10 +72,11 @@ def parse_and_validate_float_list(s: str, validate_func) -> Optional[list[float]
 def set_widget_background_color(widget, color) -> None:
     palette = widget.palette()
     palette.setColor(QPalette.Base, color)
+    palette.setColor(QPalette.Text, Qt.black)
     widget.setPalette(palette)
 
 
-def fmt(x: int|float) -> str:
+def fmt(x) -> str:
     """Format number as integer or float string."""
     if x.is_integer():
         return str(int(x))
@@ -270,6 +271,13 @@ class CalculationsWidget(QWidget):
             widget.setMinimumWidth(60)
             widget.setMaximumWidth(120)
             widget.textEdited.connect(self.validate_settings_and_update_gui_if_ok)
+
+        show_widgets = (self.repeat_dosages_mean_widget,
+                        self.repeat_dosages_equilibrium_widget)
+
+        for widget in show_widgets:
+            widget.setMinimumWidth(60)
+            widget.setMaximumWidth(120)
 
         layout = vbox_layout(
             "*stretch*",
