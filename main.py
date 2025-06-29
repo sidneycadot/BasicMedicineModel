@@ -11,7 +11,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvas
 from matplotlib.figure import Figure
 
 from PySide6.QtGui import QPalette, QColor
-from PySide6.QtWidgets import QApplication, QWidget, QLineEdit, QMainWindow, QLabel
+from PySide6.QtWidgets import QApplication, QWidget, QLineEdit, QMainWindow, QLabel, QTabWidget, QTextEdit
 
 from layout_utilities import grid_layout, vbox_layout, hbox_layout, groupbox
 
@@ -93,7 +93,140 @@ class PassiveLineEdit(QLineEdit):
         self.setAlignment(Qt.AlignCenter)
 
 
-class CentralWidget(QWidget):
+class ExplanationWidget(QTextEdit):
+    html = """
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Uitleg</title>
+      </head>
+      <body>
+        <h1>Uitleg van het programma</h1>
+        <p>Dit programma implementeert een eenvoudig model om inzicht te geven in het doseren van medicijnen.</p>
+        <p>Het model ondersteunt dagelijkse inname van een aantal <i>eenheden</i> van een geneesmiddel.
+           Het model simuleert verder opname en/of afscheiding van het medicijn in het lichaam op basis van een <i>halfwaardetijd</i>,
+           uitgedrukt in uren.</p>
+        <h2>1. Uitleg van het model</h2>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
+           Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
+           luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
+           Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
+           Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
+           Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p> 
+        <h3>1.1. Beperkingen van het model</h3>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
+           Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
+           luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
+           Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
+           Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
+           Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p> 
+        <h2>2. Instelbare waarden</h2>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
+           Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
+           luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
+           Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
+           Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
+           Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p> 
+        <h3>2.1. Halfwaardetijd medicijn</h3>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
+           Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
+           luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
+           Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
+           Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
+           Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p> 
+        <ul>
+          <li>Medicijn 1</li>
+          <li>Medicijn 2</li>
+          <li>Medicijn 3</li>
+          <li>Medicijn 4</li>
+        </ul>
+        <h3>2.2. Hoeveelheid werkzame stof in lichaam voor eerste inname</h3>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
+           Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
+           luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
+           Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
+           Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
+           Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p> 
+        <h3>2.3. Opstart-doseringen</h3>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
+           Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
+           luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
+           Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
+           Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
+           Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p> 
+        <h3>2.4. Herhaal-doseringen</h3>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
+           Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
+           luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
+           Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
+           Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
+           Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p> 
+        <h3>2.5. Grafiek start- en eindtijd</h3>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
+           Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
+           luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
+           Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
+           Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
+           Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p> 
+        <h2>3. Berekende waarden</h2>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
+           Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
+           luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
+           Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
+           Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
+           Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p> 
+        <h3>3.1. Gemiddelde herhaal-dosering</h3>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
+           Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
+           luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
+           Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
+           Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
+           Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p> 
+        <h3>3.2. Gemiddelde hoeveelheid medicijn in lichaam na inregelen</h3>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
+           Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
+           luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
+           Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
+           Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
+           Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p>
+        <h3>3.3. Grafische weergave</h3>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
+           Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
+           luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
+           Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
+           Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
+           Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p> 
+        <h2>4. Gebruiksvoorbeelden</h2>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
+           Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
+           luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
+           Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
+           Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
+           Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p> 
+        <h3>4.1. Opstarten van een nieuwe patient</h3>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
+           Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
+           luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
+           Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
+           Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
+           Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p> 
+        <h3>4.2. Een stabiele patient die een operatie moet ondergaan</h3>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
+           Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
+           luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
+           Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
+           Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
+           Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p> 
+      </body>
+    </html>
+    """
+    def __init__(self):
+        super().__init__()
+        self.setReadOnly(True)
+        self.setHtml(self.html)
+
+
+class CalculationsWidget(QWidget):
 
     color_good = QColor("#ccffcc")
     color_good_static = QColor("#eeeeff")
@@ -269,8 +402,16 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Basic Medicine Halflife Model")
 
-        central_widget = CentralWidget()
-        self.setCentralWidget(central_widget)
+        explanation_widget = ExplanationWidget()
+
+        calculations_widget = CalculationsWidget()
+
+        tab_widget = QTabWidget()
+
+        tab_widget.addTab(calculations_widget, "Berekeningen")
+        tab_widget.addTab(explanation_widget, "Uitleg")
+
+        self.setCentralWidget(tab_widget)
 
 
 class Application(QApplication):
