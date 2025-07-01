@@ -4,25 +4,63 @@
     <title>Uitleg</title>
   </head>
   <body>
+
     <h1>Uitleg van het programma</h1>
+
     <p>Dit programma implementeert een eenvoudig model om inzicht te geven in het doseren van medicijnen.</p>
-    <p>Het model ondersteunt dagelijkse inname van een aantal <i>eenheden</i> van een geneesmiddel.
-       Het model simuleert verder opname en/of afscheiding van het medicijn in het lichaam op basis van een <i>halfwaardetijd</i>,
-       uitgedrukt in uren.</p>
+
+    <p>Het model ondersteunt dagelijkse inname van een aantal <i>eenheden</i> van een geneesmiddel, en afname
+       van de hoeveelheid medicijn in het lichaam op basis van een <i>halfwaardetijd</i>.</p>
+
     <h2>1. Uitleg van het model</h2>
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
-       Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
-       luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
-       Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
-       Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
-       Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p>
+
+    <p>Het model berekent de hoeveelheid medicijn in het lichaam van een patiënt door, in stapjes van één minuut,
+       te simuleren wat er met de hoeveelheid medicijn in het lichaam gebeurt.</p>
+
+    <p>De simulatie begint met een op te geven hoeveelheid medicijn in het lichaam. Hierna worden tijd-stapjes gezet
+       van elk één minuut, waarbij twee dingen worden gesimuleerd:</p>
+
+    <ul>
+        <li>Inname van het medicijn, éénmaal per etmaal, volgens een instelbaar inname-schema. Een etmaal bestaat
+            uit 1440 minuten, dus inname wordt eens per 1440 minuten gedaan. Het effect van de inname is dat
+            de hoeveelheid medicijn in het lichaam onmiddelijk verhoogd wordt met het aantal ingenomen eenheden.</li>
+        <li>Afbraak of afscheiding van het in het lichaam aanwezige medicijn. In het model wordt elke minuut een
+            kleine fractie van de in het lichaam aanwezige stof weggenomen. De fractie is zo gekozen dat, wanneer de
+            hoeveelheid medicijn in het lichaam niet wordt aangevuld door inname, de hoeveelheid medicijn in het
+            lichaam halveert in de door de gebruiker opgegeven halfwaardetijd.</li>
+    </ul>
+
     <h3>1.1. Beperkingen van het model</h3>
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
-       Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
-       luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
-       Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
-       Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
-       Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p>
+
+    <p>Het hierboven geschetste model kan nuttig inzicht opleveren voor wat betreft dosering van medicijnen,
+       maar het is belangrijk om het goed te gebruiken.</p>
+
+    <h3>1.1.1. Wat laat de grafiek precies zien?</h3>
+
+    <p>Allereerst is het belangrijk om de grafiek die het programma laat zien goed te interpreteren.
+       Wat de grafiek laat zien is alleen hoe de hoeveelheid medicijn in het lichaam door de tijd variëert;
+       <em>het is nadrukkelijk niet een maat voor het gewenste effect van het medicijn!</em></p>
+
+    <p>Bij trombose-medicatie zou het bijvoorbeeld heel nuttig zijn om te zien hoe de INR-waarde
+       zich door de tijd ontwikkelt aan de hand van de ingenomen medicijnen, maar dat is niet wat de grafiek
+       laat zien. De INR wordt natuurlijk beïnvloed door de hoeveelheid medicijn in het lichaam, maar hoe
+       dat precies gebeurt is complex, met allerlei metabolische tussenstappen die verschillen per medicijn.
+       Het model wat dit programma gebruikt is veel te simpel om dat soort effecten te berekenen.</p>
+
+    <h3>1.1.2. Het model is veel simpeler dan de werkelijkheid</h3>
+
+    <p>Het menselijk lichaam is erg ingewikkeld en er vinden gelijktijdig veel processen plaats die verband
+       houden met de medicijnopname. Het model is juist erg eenvoudig. Enkele voorbeelden waarin het model
+       verschilt van de werkelijkheid:</p>
+
+    <ul>
+        <li>Het model ziet het lichaam als één geheel waar het medicijn in zit. In werkelijkheid
+        komen medicijnen het lichaam binnen via de maag of bloedbaan, en kost het tijd om het medicijn
+        op de plek te krijgen waar het zijn werk kan doen (bijvoorbeeld een specifiek orgaan).</li>
+        <li>Modellering afbraak.</li>
+        <li>Variabiliteit tussen patiënten.</li>
+    </ul>
+
     <h2>2. Instelbare waarden</h2>
     <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
        Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
