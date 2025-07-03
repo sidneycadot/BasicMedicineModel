@@ -32,12 +32,12 @@
 
     <h3>1.1. Beperkingen van het model</h3>
 
-    <p>Het hierboven geschetste model kan nuttig inzicht opleveren voor wat betreft dosering van medicijnen,
+    <p>Het hierboven beschreven model kan nuttig inzicht opleveren voor wat betreft dosering van medicijnen,
        maar het is belangrijk om het goed te gebruiken.</p>
 
     <h3>1.1.1. Wat laat de grafiek precies zien?</h3>
 
-    <p>Allereerst is het belangrijk om de grafiek die het programma laat zien goed te interpreteren.
+    <p>Het is belangrijk om de grafiek die het programma laat zien goed te interpreteren.
        Wat de grafiek laat zien is alleen hoe de hoeveelheid medicijn in het lichaam door de tijd variëert;
        <em>het is nadrukkelijk niet een maat voor het gewenste effect van het medicijn!</em></p>
 
@@ -45,118 +45,104 @@
        zich door de tijd ontwikkelt aan de hand van de ingenomen medicijnen, maar dat is niet wat de grafiek
        laat zien. De INR wordt natuurlijk beïnvloed door de hoeveelheid medicijn in het lichaam, maar hoe
        dat precies gebeurt is complex, met allerlei metabolische tussenstappen die verschillen per medicijn.
-       Het model wat dit programma gebruikt is veel te simpel om dat soort effecten te berekenen.</p>
+       Het model wat dit programma gebruikt is veel te simpel om dat soort effecten uit te rekenen.</p>
 
     <h3>1.1.2. Het model is veel simpeler dan de werkelijkheid</h3>
 
     <p>Het menselijk lichaam is erg ingewikkeld en er vinden gelijktijdig veel processen plaats die verband
-       houden met de medicijnopname. Het model is juist erg eenvoudig. Enkele voorbeelden waarin het model
-       verschilt van de werkelijkheid:</p>
+       houden met de medicijn-opname en werking. Het model is juist erg eenvoudig. Enkele voorbeelden waarin
+       het model verschilt van de werkelijkheid:</p>
 
     <ul>
         <li>Het model ziet het lichaam als één geheel waar het medicijn in zit. In werkelijkheid
         komen medicijnen het lichaam binnen via de maag of bloedbaan, en kost het tijd om het medicijn
         op de plek te krijgen waar het zijn werk kan doen (bijvoorbeeld een specifiek orgaan).</li>
-        <li>Modellering afbraak.</li>
-        <li>Variabiliteit tussen patiënten.</li>
+        <li>In werkelijkheid wordt de hoeveelheid medicijn in het lichaam in de loop van de tijd
+            kleiner door metabolisering (chemische reacties, vaak in specifieke organen), of doordat
+            de stof in onveranderde vorm wordt afgevoerd (bjvoorbeeld in urine). Het precieze
+            tempo waarin dit gebeurt is variabel. Het model daarentegen veronderstelt dat de afbraak
+            perfect geleidelijk gebeurt: elke minuut wordt een bepaald percentage van het medicijn
+            afgebroken. Dit is een bruikbare benadering die zorgt dat we kunnen spreken over de
+            "halfwaardetijd" van een medicijn; maar het blijft slechts een benadering.</li>
+        <li>Er is een flinke variabiliteit in de verwerking van medicijnen tussen individuele patienten,
+            zowel door aangeboren (genetische) verschillen als door andere factoren zoals leeftijd,
+            geslacht, en conditie. De "halfwaardetijd" die wordt gegeven voor mensen is slechts een
+            gemiddelde benadering, en wordt ook vaak gegeven met een onder- en bovengrens in plaats
+            van een enkel getal.</li>
     </ul>
 
     <h2>2. Instelbare waarden</h2>
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
-       Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
-       luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
-       Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
-       Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
-       Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p>
+
+    <p>Het programme ondersteunt een aantal waarden die kunnen worden ingesteld door de gebruiker.</p>
+
     <h3>2.1. Halfwaardetijd medicijn</h3>
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
-       Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
-       luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
-       Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
-       Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
-       Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p>
+
+    <p>De halfwaardetijd van het medicijn kan worden ingesteld. Deze wordt uitgedrukt in uren, en beschrijft
+       het tempo waarin het medicijn in het lichaam wordt afgebroken. Na het verstrijken van één halfwaardetijd
+       is nog slechts 50% van het medicijn aanwezig; na twee halfwaardetijden is dat 25%, enzovoort.</p>
+
+    <p>Enkele halfwaardetijden van trobose-mdicatie (bron: TBC):</p>
     <ul>
-      <li>Medicijn 1</li>
-      <li>Medicijn 2</li>
-      <li>Medicijn 3</li>
-      <li>Medicijn 4</li>
+      <li>Acenocoumarol: 8 tot 11 uur.</li>
+      <li>Warfarine: 40 uur.</li>
+      <li>Fenprocoumon: 160 uur.</li>
     </ul>
+
     <h3>2.2. Hoeveelheid werkzame stof in lichaam voor eerste inname</h3>
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
-       Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
-       luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
-       Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
-       Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
-       Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p>
+
+    <p>Voor simulatie is het nodig om een beginwaarde te hebben voor het medicjnen in de patient,
+       uitgedrukt in <em>eengeden</em>. Voor patiënten die moeten opstarten is 0.0 een logische
+       waarde; voor patiënten die eerder het medicijn hebben gebruikt is een waarde groter dan nul
+       beter.</p>
+    <p>Voor stabiele, ingeregelde patiënten is de 'gemiddelde hoeveelheid medicijn in het lichaam',
+       die door het programma wordt berekend en getoond  op basis van de halfwaardetijd en het de herhaal-doseringen,
+       een goede keus.
+    </p>
+
     <h3>2.3. Opstart-doseringen</h3>
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
-       Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
-       luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
-       Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
-       Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
-       Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p>
+
+    <p>De opstart-doseringen worden gegeven als een lijst van getallen, gescheiden door een min-teken.
+       Getallen hoeven geen hele getallen te zijn; een dosis van anderhalve eenheid kan bijvoorbeeld worden
+       gegeven als "1.5". Let op dat het programma een punt gebruikt in plaats van een komma voor dergelijke
+       getallen.</p>
+    <p>Het is mogelijk om een leeg opstart-schema te geven; in dat geval wordt meteen begonnen met het
+       herhaal-doseringen schema.</p>
+
     <h3>2.4. Herhaal-doseringen</h3>
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
-       Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
-       luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
-       Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
-       Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
-       Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p>
+
+    <p>Nadat de opstart-doesringen allemaal zijn gegeven wordt een repeterend herhaal-schema aangehouden.
+       Deze wordt op dezelfde manier beschreven als het opstart-schema: een lijst van getallen,
+       gescheiden door min-tekens. Het verschil met het opstart-schema is, dat het herhaal-schema wordt
+       herhaald.</p>
+    <p>Het is mogelijk om een leeg herhaal-schema te geven; in dat geval wordt na de opstart-periode
+       gestopt met het innemen van het medicijn; ofwel, de dagelijkse dosering wordt nul.</p>
+
     <h3>2.5. Grafiek start- en eindtijd</h3>
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
-       Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
-       luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
-       Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
-       Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
-       Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p>
+
+    <p>Het programma toont een grafiek. De begin- en eindtijd bepaalt het bereik van de horizontale (tijd)
+       as van de grafiek.</p>
+
     <h2>3. Berekende waarden</h2>
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
-       Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
-       luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
-       Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
-       Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
-       Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p>
+
+    <p>Bij iedere wijziging aan een invoerveldt berekent het programma enkele waarden.</p>
+
     <h3>3.1. Gemiddelde herhaal-dosering</h3>
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
-       Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
-       luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
-       Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
-       Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
-       Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p>
+
+    <p>Deze waarde is het gemiddelde van de herhaal-doseringen.</p>
+
     <h3>3.2. Gemiddelde hoeveelheid medicijn in lichaam na inregelen</h3>
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
-       Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
-       luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
-       Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
-       Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
-       Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p>
-    <h3>3.3. Grafische weergave</h3>
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
-       Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
-       luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
-       Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
-       Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
-       Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p>
-    <h2>4. Gebruiksvoorbeelden</h2>
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
-       Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
-       luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
-       Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
-       Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
-       Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p>
-    <h3>4.1. Opstarten van een nieuwe patient</h3>
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
-       Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
-       luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
-       Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
-       Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
-       Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p>
-    <h3>4.2. Een stabiele patient die een operatie moet ondergaan</h3>
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi vitae dignissim purus.
-       Nulla sagittis aliquam arcu, ac feugiat magna ornare sed. Vestibulum pharetra tellus quis lacus molestie,
-       luctus ultricies nibh varius. Nullam eu enim lobortis, rutrum velit vel, cursus odio.
-       Duis dapibus neque leo, fringilla ornare turpis consequat in. Sed condimentum sodales vestibulum.
-       Fusce placerat magna commodo erat interdum, sed dignissim lectus tempor. Aliquam pulvinar scelerisque nibh nec aliquet.
-       Nam ac tempus eros. Nunc ut laoreet justo. Nam fringilla in enim at varius.</p>
+
+    <p>Deze waarde is de gemiddelde hoeveelheid medicijn in het lichaam als de patiënt volledig
+       is ingeregeld en zich aan het herhaal-schema houdt. Deze wordt berekend aan de hand van de
+       gemiddelde dosering en de halfwaardetijd, op basis van de volgende formule:</p>
+
+    <tt>gemiddelde_hoeveelheid_medicijn_in_lichaam = gemiddelde_herhaal_dosering_per_etmaal * (halfwaardetijd_in_uren / 24) / log(2)</tt>
+
+    <p>Hierin is log(2) gelijk aan de natuurlijke logaritme van 2: log(2) ≈ 0.693147.</p>
+
+    <p>In de praktijk is de volgende vorm van de formule handig:</p>
+
+    <tt>gemiddelde_hoeveelheid_medicijn_in_lichaam = gemiddelde_herhaal_dosering_per_etmaal * halfwaardetijd_in_uren / 16.6355</tt>
+
   </body>
 </html>
