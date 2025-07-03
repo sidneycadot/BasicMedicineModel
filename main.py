@@ -136,9 +136,9 @@ class CalculationsWidget(QWidget):
         self.repeat_dosages_mean_widget = PassiveLineEdit()
         self.repeat_dosages_equilibrium_widget = PassiveLineEdit()
 
-        self.halflife_widget.setToolTip("Acenocoumarol: 8 tot 11 uur\n"
-                                        "Warfarine: 40 uur\n"
-                                        "Fenprocoumon: 160 uur")
+        self.halflife_widget.setToolTip("Acenocoumarol: 8 tot 14 uur, gemiddeld 11 uur\n"
+                                        "Warfarine: 38 tot 42 uur, gemiddeld 40 uur\n"
+                                        "Fenprocoumon: 120 tot 200 uur, gemiddeld 160 uur")
 
         edit_widgets = (self.halflife_widget,
                         self.start_amount_widget,

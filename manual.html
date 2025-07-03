@@ -55,11 +55,11 @@
 
     <ul>
         <li>Het model ziet het lichaam als één geheel waar het medicijn in zit. In werkelijkheid
-        komen medicijnen het lichaam binnen via de maag of bloedbaan, en kost het tijd om het medicijn
-        op de plek te krijgen waar het zijn werk kan doen (bijvoorbeeld een specifiek orgaan).</li>
+            komen medicijnen het lichaam binnen via de maag of bloedbaan, en kost het tijd om het medicijn
+            op de plek te krijgen waar het zijn werk kan doen (bijvoorbeeld in een specifiek orgaan).</li>
         <li>In werkelijkheid wordt de hoeveelheid medicijn in het lichaam in de loop van de tijd
             kleiner door metabolisering (chemische reacties, vaak in specifieke organen), of doordat
-            de stof in onveranderde vorm wordt afgevoerd (bjvoorbeeld in urine). Het precieze
+            de stof in onveranderde vorm wordt afgevoerd (bijvoorbeeld in de urine). Het precieze
             tempo waarin dit gebeurt is variabel. Het model daarentegen veronderstelt dat de afbraak
             perfect geleidelijk gebeurt: elke minuut wordt een bepaald percentage van het medicijn
             afgebroken. Dit is een bruikbare benadering die zorgt dat we kunnen spreken over de
@@ -73,7 +73,7 @@
 
     <h2>2. Instelbare waarden</h2>
 
-    <p>Het programme ondersteunt een aantal waarden die kunnen worden ingesteld door de gebruiker.</p>
+    <p>Het programma ondersteunt een aantal waarden die kunnen worden ingesteld door de gebruiker.</p>
 
     <h3>2.1. Halfwaardetijd medicijn</h3>
 
@@ -81,23 +81,23 @@
        het tempo waarin het medicijn in het lichaam wordt afgebroken. Na het verstrijken van één halfwaardetijd
        is nog slechts 50% van het medicijn aanwezig; na twee halfwaardetijden is dat 25%, enzovoort.</p>
 
-    <p>Enkele halfwaardetijden van trobose-mdicatie (bron: TBC):</p>
+    <p>Enkele halfwaardetijden van trombose-medicatie (bron: <em>De kunst van het doseren</em>, Federatie van Nederlandse Trombosediensten, 2024):</p>
+
     <ul>
-      <li>Acenocoumarol: 8 tot 11 uur.</li>
-      <li>Warfarine: 40 uur.</li>
-      <li>Fenprocoumon: 160 uur.</li>
+      <li>Acenocoumarol: 8 tot 14 uur; gemiddeld 11.</li>
+      <li>Warfarine: 38 tot 42 uur; gemiddeld 40 uur.</li>
+      <li>Fenprocoumon: 120 tot 200 uur; gemiddeld 160.</li>
     </ul>
 
     <h3>2.2. Hoeveelheid werkzame stof in lichaam voor eerste inname</h3>
 
-    <p>Voor simulatie is het nodig om een beginwaarde te hebben voor het medicjnen in de patient,
-       uitgedrukt in <em>eengeden</em>. Voor patiënten die moeten opstarten is 0.0 een logische
+    <p>Voor simulatie is het nodig om een beginwaarde te hebben voor de hoeveelheid medicijn in de patient,
+       uitgedrukt in <em>eenheden</em>. Voor patiënten die moeten opstarten is 0.0 een logische
        waarde; voor patiënten die eerder het medicijn hebben gebruikt is een waarde groter dan nul
        beter.</p>
     <p>Voor stabiele, ingeregelde patiënten is de 'gemiddelde hoeveelheid medicijn in het lichaam',
-       die door het programma wordt berekend en getoond  op basis van de halfwaardetijd en het de herhaal-doseringen,
-       een goede keus.
-    </p>
+       die door het programma wordt berekend en getoond  op basis van de halfwaardetijd en
+       de herhaal-doseringen, een goede keus.</p>
 
     <h3>2.3. Opstart-doseringen</h3>
 
@@ -110,9 +110,9 @@
 
     <h3>2.4. Herhaal-doseringen</h3>
 
-    <p>Nadat de opstart-doesringen allemaal zijn gegeven wordt een repeterend herhaal-schema aangehouden.
+    <p>Nadat de opstart-doseringen allemaal zijn gegeven wordt een repeterend herhaal-schema aangehouden.
        Deze wordt op dezelfde manier beschreven als het opstart-schema: een lijst van getallen,
-       gescheiden door min-tekens. Het verschil met het opstart-schema is, dat het herhaal-schema wordt
+       gescheiden door min-tekens. Het verschil met het opstart-schema is dat het herhaal-schema wordt
        herhaald.</p>
     <p>Het is mogelijk om een leeg herhaal-schema te geven; in dat geval wordt na de opstart-periode
        gestopt met het innemen van het medicijn; ofwel, de dagelijkse dosering wordt nul.</p>
@@ -124,7 +124,7 @@
 
     <h2>3. Berekende waarden</h2>
 
-    <p>Bij iedere wijziging aan een invoerveldt berekent het programma enkele waarden.</p>
+    <p>Bij iedere wijziging aan een invoerveld berekent het programma enkele waarden.</p>
 
     <h3>3.1. Gemiddelde herhaal-dosering</h3>
 
