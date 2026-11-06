@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<!--
+================================================================================
+  Basic Medicine Halflife Model — web version
+================================================================================
+
+  WHAT THIS IS
+    A single, self-contained HTML file that replicates the PySide6 desktop
+    application in ../main.py. Open it in any modern browser (Firefox, Edge,
+    Chrome, Safari). It needs no internet connection and no other files.
+
+  WHAT IT DOES
+    It simulates the amount of a medicine in the body over time, given:
+      - the medicine's half-life (in hours),
+      - the amount present before the first dose,
+      - a list of start-up doses (one per day, given once),
+      - a list of repeat doses (one per day, repeated after the start-up doses),
+    and plots the result, together with the average amount that is reached
+    once the patient is stable on the repeat schedule ("equilibrium").
+
+  FILE LAYOUT
+    1. <style>                 — all CSS (colours are variables; light/dark mode)
+    2. <body>                  — the page: input fields, calculated values, graph
+    3. <template id="manual">  — the manual ("Uitleg"), opened in a new tab
+    4. <script>                — all JavaScript, in numbered sections:
+         4.1  Constants and defaults
+         4.2  Number formatting and rounding helpers
+         4.3  Model (identical to the Python version)
+         4.4  Parsing and validation of input fields
+         4.5  Graph drawing (plain <canvas>, no libraries)
+         4.6  Hover read-out on the graph
+         4.7  Settings in the URL (bookmarking, duplicating)
+         4.8  User interface: reading fields, colouring, updating
+         4.9  Actions: duplicate (Ctrl+D), manual, half-life presets
+         4.10 Start-up
+
+  DIFFERENCES FROM THE PYTHON APP
+    - Duplicate (button or Ctrl+D) opens a new browser tab instead of a new
+      window. The settings travel along in the URL (after the '#'), so a
+      scenario can also be bookmarked or shared.
+    - Decimal numbers may be typed with a comma ("4,5") as well as a point.
+    - An invalid field gets a short hint underneath explaining what is wrong.
+    - Until the input is valid for the first time, empty axes are shown.
+    - Hovering over the graph shows the time and the amount at that point.
+    - Colours follow the browser's light/dark mode.
+    - A drop-down offers the half-lives of three common anticoagulants.
+================================================================================
+-->
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Basic Medicine Halflife Model</title>
+
+<!-- ======================================================================
+     1. CSS
+     ====================================================================== -->
+<style>
+/* ---- 1.1 Colour tokens (light mode) ------------------------------------ */
+:root {
+  color-scheme: light dark;
+  --bg:            #ffffff;
+  --fg:            #1a1a1a;
+  --muted:         #666666;
+  --border:        #bbbbbb;
+  --button-bg:     #f0f0f0;
+  --button-hover:  #e0e0e0;
+
+  /* Field backgrounds, same as the Python app. */
+  --field-good:    #ccffcc;   /* valid input                  */
+  --field-static:  #eeeeff;   /* calculated (read-only) value */
+  --field-bad:     #ffcccc;   /* invalid input                */
+  --field-text:    #000000;
+  --error-text:    #b00020;   /* hint text under an invalid field */
+
+  /* Graph colours (matplotlib defaults: 'C0' blue and 'm' magenta). */
+  --graph-line:    #1f77b4;
+  --graph-eq:      #bf00bf;
+  --graph-grid:    #b0b0b0;
+  --graph-axis:    #1a1a1a;
+  --graph-hover:   #ff7f0e;
+  --tooltip-bg:    rgba(255, 255, 255, 0.95);
+}
+
+/* ---- 1.2 Colour tokens (dark mode) ------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:            #1e1e1e;
+    --fg:            #e6e6e6;
+    --muted:         #a0a0a0;
+    --border:        #555555;
+    --button-bg:     #333333;
+    --button-hover:  #444444;
+
+    --field-good:    #1f4d2a;
+    --field-static:  #2a2d4a;
+    --field-bad:     #5c2626;
+    --field-text:    #ffffff;
+    --error-text:    #ff8a8a;
+
+    --graph-line:    #5aa9e6;
+    --graph-eq:      #e066e0;
+    --graph-grid:    #444444;
+    --graph-axis:    #e6e6e6;
+    --graph-hover:   #ffa64d;
+    --tooltip-bg:    rgba(40, 40, 40, 0.95);
+  }
+}
+
+/* ---- 1.3 Page layout --------------------------------------------------- */
+* { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  display: flex;            /* form on top, graph fills the rest */
+  flex-direction: column;
+  padding: 12px 16px;
+  gap: 8px;
+}
+
+/* ---- 1.4 Toolbar (title and buttons) ----------------------------------- */
+header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+header h1 { font-size: 18px; margin: 0; }
+header .buttons { display: flex; gap: 8px; }
+
+button, .button {
+  font: inherit;
+  color: var(--fg);
+  background: var(--button-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 12px;
+  cursor: pointer;
+  text-decoration: none;
+}
+button:hover, .button:hover { background: var(--button-hover); }
+
+/* ---- 1.5 Input form (a 3-column grid: label, field, unit) -------------- */
+#form {
+  align-self: center;
+  display: grid;
+  grid-template-columns: auto auto auto;
+  gap: 4px 10px;
+  align-items: center;
+  max-width: 100%;
+}
+#form h2 {
+  grid-column: 1 / -1;
+  font-size: 15px;
+  margin: 8px 0 2px;
+}
+#form label { padding-left: 1em; }
+#form .unit { color: var(--muted); }
+
+/* The half-life row has an extra drop-down next to the unit. */
+#form .unit-with-preset { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+#form input {
+  width: 120px;
+  min-width: 60px;
+  font: inherit;
+  text-align: left;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--field-text);
+  background: var(--field-good);
+}
+#form input.bad    { background: var(--field-bad); }
+#form input.static { background: var(--field-static); text-align: center; }
+#form input.static.bad { background: var(--field-bad); }
+
+/* Hint under an invalid field, explaining what is wrong. It sits below the
+   field and unit columns, and takes no space while it is empty. */
+#form .error {
+  grid-column: 2 / -1;
+  color: var(--error-text);
+  font-size: 13px;
+  margin-top: -2px;
+}
+#form .error:empty { display: none; }
+
+select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--button-bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+/* On narrow screens, stack label above field. */
+@media (max-width: 560px) {
+  #form { grid-template-columns: auto auto; }
+  #form label { grid-column: 1 / -1; padding-left: 0; margin-top: 4px; }
+  #form .error { grid-column: 1 / -1; }
+}
+
+/* ---- 1.6 Graph --------------------------------------------------------- */
+#graph-container {
+  position: relative;   /* the overlay and tooltip are positioned inside */
+  flex: 1;
+  min-height: 300px;
+}
+#graph-container canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+#tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--tooltip-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-size: 13px;
+  white-space: nowrap;
+  display: none;
+}
+</style>
+</head>
+
+<!-- ======================================================================
+     2. PAGE CONTENT
+     ====================================================================== -->
+<body>
+
+<header>
+  <h1>Basic Medicine Halflife Model</h1>
+  <div class="buttons">
+    <button id="duplicate-button" type="button"
+            title="Open een nieuw tabblad met dezelfde instellingen (Ctrl+D)">Dupliceren</button>
+    <!-- The href is filled in by the script (section 4.9). -->
+    <a id="manual-link" class="button" target="_blank" rel="noopener">Uitleg</a>
+  </div>
+</header>
+
+<!-- The ids of the input fields are used by the script (section 4.8). -->
+<div id="form">
+  <h2>Invoervelden</h2>
+
+  <label for="halflife">Halfwaardetijd medicijn</label>
+  <input id="halflife" inputmode="decimal" autocomplete="off"
+         title="Acenocoumarol: 8 tot 14 uur, gemiddeld 11 uur&#10;Warfarine: 38 tot 42 uur, gemiddeld 40 uur&#10;Fenprocoumon: 120 tot 200 uur, gemiddeld 160 uur">
+  <span class="unit unit-with-preset">uren
+    <select id="halflife-preset" title="Kies de gemiddelde halfwaardetijd van een medicijn">
+      <option value="">medicijn…</option>
+      <option value="11">Acenocoumarol (11 uur)</option>
+      <option value="40">Warfarine (40 uur)</option>
+      <option value="160">Fenprocoumon (160 uur)</option>
+    </select>
+  </span>
+  <div class="error" id="halflife-error" aria-live="polite"></div>
+
+  <label for="start-amount">Hoeveelheid medicijn in lichaam voor eerste inname</label>
+  <input id="start-amount" inputmode="decimal" autocomplete="off">
+  <span class="unit">eenheden</span>
+  <div class="error" id="start-amount-error" aria-live="polite"></div>
+
+  <label for="startup-dosages">Opstart-doseringen</label>
+  <input id="startup-dosages" autocomplete="off">
+  <span class="unit">eenheden per etmaal</span>
+  <div class="error" id="startup-dosages-error" aria-live="polite"></div>
+
+  <label for="repeat-dosages">Herhaal-doseringen</label>
+  <input id="repeat-dosages" autocomplete="off">
+  <span class="unit">eenheden per etmaal</span>
+  <div class="error" id="repeat-dosages-error" aria-live="polite"></div>
+
+  <label for="graph-start">Grafiek start-tijd</label>
+  <input id="graph-start" inputmode="decimal" autocomplete="off">
+  <span class="unit">etmalen</span>
+  <div class="error" id="graph-start-error" aria-live="polite"></div>
+
+  <label for="graph-end">Grafiek eind-tijd</label>
+  <input id="graph-end" inputmode="decimal" autocomplete="off">
+  <span class="unit">etmalen</span>
+  <div class="error" id="graph-end-error" aria-live="polite"></div>
+
+  <h2>Berekende waarden</h2>
+
+  <label for="repeat-mean">Gemiddelde herhaal-dosering</label>
+  <input id="repeat-mean" class="static" readonly tabindex="-1">
+  <span class="unit">eenheden per etmaal</span>
+
+  <label for="repeat-equilibrium">Gemiddelde hoeveelheid medicijn in lichaam na inregelen</label>
+  <input id="repeat-equilibrium" class="static" readonly tabindex="-1">
+  <span class="unit">eenheden</span>
+</div>
+
+<!-- Two stacked canvases: the graph itself, and a transparent overlay for
+     the hover marker (so hovering does not redraw the whole graph). -->
+<div id="graph-container">
+  <canvas id="graph"></canvas>
+  <canvas id="graph-overlay"></canvas>
+  <div id="tooltip"></div>
+</div>
+
+<!-- ======================================================================
+     3. MANUAL ("Uitleg")
+     The content of this template is not shown on this page. When the user
+     clicks "Uitleg", it is turned into a separate page and opened in a new
+     tab (see section 4.9). It carries its own <style>, which only applies
+     to that page. Text taken from ../manual.html, adjusted for the web version.
+     ====================================================================== -->
+<template id="manual">
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+    max-width: 50em;
+    margin: 0 auto;
+    padding: 16px;
+    background: #ffffff;
+    color: #1a1a1a;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1e1e1e; color: #e6e6e6; }
+  }
+  code { display: block; margin: 0.5em 0; overflow-x: auto; }
+</style>
+
+<h1>Uitleg van het programma</h1>
+
+<p>Dit programma implementeert een eenvoudig model om inzicht te geven in het doseren van medicijnen.</p>
+
+<p>Het model ondersteunt dagelijkse inname van een aantal <i>eenheden</i> van een geneesmiddel, en afname
+   van de hoeveelheid medicijn in het lichaam op basis van een <i>halfwaardetijd</i>.</p>
+
+<h2>1. Uitleg van het model</h2>
+
+<p>Het model berekent de hoeveelheid medicijn in het lichaam van een patiënt door, in stapjes van één minuut,
+   te simuleren wat er met de hoeveelheid medicijn in het lichaam gebeurt.</p>
+
+<p>De simulatie begint met een op te geven hoeveelheid medicijn in het lichaam. Hierna worden tijd-stapjes gezet
+   van elk één minuut, waarbij twee dingen worden gesimuleerd:</p>
+
+<ul>
+  <li>Inname van het medicijn, éénmaal per etmaal, volgens een instelbaar inname-schema. Een etmaal bestaat
+      uit 1440 minuten, dus inname wordt eens per 1440 minuten gedaan. Het effect van de inname is dat
+      de hoeveelheid medicijn in het lichaam onmiddelijk verhoogd wordt met het aantal ingenomen eenheden.</li>
+  <li>Afbraak of afscheiding van het in het lichaam aanwezige medicijn. In het model wordt elke minuut een
+      kleine fractie van de in het lichaam aanwezige stof weggenomen. De fractie is zo gekozen dat, wanneer de
+      hoeveelheid medicijn in het lichaam niet wordt aangevuld door inname, de hoeveelheid medicijn in het
+      lichaam halveert in de door de gebruiker opgegeven halfwaardetijd.</li>
+</ul>
+
+<h3>1.1. Beperkingen van het model</h3>
+
+<p>Het hierboven beschreven model kan nuttig inzicht opleveren voor wat betreft dosering van medicijnen,
+   maar het is belangrijk om het goed te gebruiken.</p>
+
+<h3>1.1.1. Wat laat de grafiek precies zien?</h3>
+
+<p>Het is belangrijk om de grafiek die het programma laat zien goed te interpreteren.
+   Wat de grafiek laat zien is alleen hoe de hoeveelheid medicijn in het lichaam door de tijd variëert;
+   <em>het is nadrukkelijk niet een maat voor het gewenste effect van het medicijn!</em></p>
+
+<p>Bij trombose-medicatie zou het bijvoorbeeld heel nuttig zijn om te zien hoe de INR-waarde
+   zich door de tijd ontwikkelt aan de hand van de ingenomen medicijnen, maar dat is niet wat de grafiek
+   laat zien. De INR wordt natuurlijk beïnvloed door de hoeveelheid medicijn in het lichaam, maar hoe
+   dat precies gebeurt is complex, met allerlei metabolische tussenstappen die verschillen per medicijn.
+   Het model wat dit programma gebruikt is veel te simpel om dat soort effecten uit te rekenen.</p>
+
+<h3>1.1.2. Het model is veel simpeler dan de werkelijkheid</h3>
+
+<p>Het menselijk lichaam is erg ingewikkeld en er vinden gelijktijdig veel processen plaats die verband
+   houden met de medicijn-opname en werking. Het model is juist erg eenvoudig. Enkele voorbeelden waarin
+   het model verschilt van de werkelijkheid:</p>
+
+<ul>
+  <li>Het model ziet het lichaam als één geheel waar het medicijn in zit. In werkelijkheid
+      komen medicijnen het lichaam binnen via de maag of bloedbaan, en kost het tijd om het medicijn
+      op de plek te krijgen waar het zijn werk kan doen (bijvoorbeeld in een specifiek orgaan).</li>
+  <li>In werkelijkheid wordt de hoeveelheid medicijn in het lichaam in de loop van de tijd
+      kleiner door metabolisering (chemische reacties, vaak in specifieke organen), of doordat
+      de stof in onveranderde vorm wordt afgevoerd (bijvoorbeeld in de urine). Het precieze
+      tempo waarin dit gebeurt is variabel. Het model daarentegen veronderstelt dat de afbraak
+      perfect geleidelijk gebeurt: elke minuut wordt een bepaald percentage van het medicijn
+      afgebroken. Dit is een bruikbare benadering die zorgt dat we kunnen spreken over de
+      "halfwaardetijd" van een medicijn; maar het blijft slechts een benadering.</li>
+  <li>Er is een flinke variabiliteit in de verwerking van medicijnen tussen individuele patienten,
+      zowel door aangeboren (genetische) verschillen als door andere factoren zoals leeftijd,
+      geslacht, en conditie. De "halfwaardetijd" die wordt gegeven voor mensen is slechts een
+      gemiddelde benadering, en wordt ook vaak gegeven met een onder- en bovengrens in plaats
+      van een enkel getal.</li>
+</ul>
+
+<h2>2. Instelbare waarden</h2>
+
+<p>Het programma ondersteunt een aantal waarden die kunnen worden ingesteld door de gebruiker.
+   Een veld met een groene achtergrond bevat een geldige waarde; een rode achtergrond betekent
+   dat de waarde niet geldig is. Onder een rood veld staat dan een korte uitleg van wat er mis is.
+   De grafiek wordt alleen bijgewerkt als alle velden geldig zijn.</p>
+
+<h3>2.1. Halfwaardetijd medicijn</h3>
+
+<p>De halfwaardetijd van het medicijn kan worden ingesteld. Deze wordt uitgedrukt in uren, en beschrijft
+   het tempo waarin het medicijn in het lichaam wordt afgebroken. Na het verstrijken van één halfwaardetijd
+   is nog slechts 50% van het medicijn aanwezig; na twee halfwaardetijden is dat 25%, enzovoort.</p>
+
+<p>Enkele halfwaardetijden van trombose-medicatie (bron: <em>De kunst van het doseren</em>, Federatie van Nederlandse Trombosediensten, 2024):</p>
+
+<ul>
+  <li>Acenocoumarol: 8 tot 14 uur; gemiddeld 11 uur.</li>
+  <li>Warfarine: 38 tot 42 uur; gemiddeld 40 uur.</li>
+  <li>Fenprocoumon: 120 tot 200 uur; gemiddeld 160 uur.</li>
+</ul>
+
+<p>De gemiddelde waarden kunnen ook gekozen worden met de keuzelijst naast het invoerveld.</p>
+
+<h3>2.2. Hoeveelheid werkzame stof in lichaam voor eerste inname</h3>
+
+<p>Voor simulatie is het nodig om een beginwaarde te hebben voor de hoeveelheid medicijn in de patient,
+   uitgedrukt in <em>eenheden</em>. Voor patiënten die moeten opstarten is 0 een logische
+   waarde; voor patiënten die eerder het medicijn hebben gebruikt is een waarde groter dan nul
+   beter.</p>
+<p>Voor stabiele, ingeregelde patiënten is de 'gemiddelde hoeveelheid medicijn in het lichaam',
+   die door het programma wordt berekend en getoond op basis van de halfwaardetijd en
+   de herhaal-doseringen, een goede keus.</p>
+
+<h3>2.3. Opstart-doseringen</h3>
+
+<p>De opstart-doseringen worden gegeven als een lijst van getallen, gescheiden door een min-teken.
+   Getallen hoeven geen hele getallen te zijn; een dosis van anderhalve eenheid kan bijvoorbeeld worden
+   gegeven als "1.5" of als "1,5".</p>
+<p>Het is mogelijk om een leeg opstart-schema te geven; in dat geval wordt meteen begonnen met het
+   herhaal-doseringen schema.</p>
+
+<h3>2.4. Herhaal-doseringen</h3>
+
+<p>Nadat de opstart-doseringen allemaal zijn gegeven wordt een repeterend herhaal-schema aangehouden.
+   Deze wordt op dezelfde manier beschreven als het opstart-schema: een lijst van getallen,
+   gescheiden door min-tekens. Het verschil met het opstart-schema is dat het herhaal-schema wordt
+   herhaald.</p>
+<p>Het is mogelijk om een leeg herhaal-schema te geven; in dat geval wordt na de opstart-periode
+   gestopt met het innemen van het medicijn; ofwel, de dagelijkse dosering wordt nul.</p>
+
+<h3>2.5. Grafiek start- en eindtijd</h3>
+
+<p>Het programma toont een grafiek. De begin- en eindtijd bepaalt het bereik van de horizontale (tijd)
+   as van de grafiek. De eindtijd is maximaal 500 etmalen, en moet groter zijn dan de begintijd.</p>
+<p>Door met de muis over de grafiek te bewegen worden het tijdstip en de hoeveelheid medicijn op dat
+   moment getoond.</p>
+
+<h2>3. Berekende waarden</h2>
+
+<p>Bij iedere wijziging aan een invoerveld berekent het programma enkele waarden.</p>
+
+<h3>3.1. Gemiddelde herhaal-dosering</h3>
+
+<p>Deze waarde is het gemiddelde van de herhaal-doseringen.</p>
+
+<h3>3.2. Gemiddelde hoeveelheid medicijn in lichaam na inregelen</h3>
+
+<p>Deze waarde is de gemiddelde hoeveelheid medicijn in het lichaam als de patiënt volledig
+   is ingeregeld en zich aan het herhaal-schema houdt. Deze wordt berekend aan de hand van de
+   gemiddelde dosering en de halfwaardetijd, op basis van de volgende formule:</p>
+
+<code>gemiddelde_hoeveelheid_medicijn_in_lichaam = gemiddelde_herhaal_dosering_per_etmaal * (halfwaardetijd_in_uren / 24) / log(2)</code>
+
+<p>Hierin is log(2) gelijk aan de natuurlijke logaritme van 2: log(2) ≈ 0.693147.</p>
+
+<p>In de praktijk is de volgende vorm van de formule handig:</p>
+
+<code>gemiddelde_hoeveelheid_medicijn_in_lichaam = gemiddelde_herhaal_dosering_per_etmaal * halfwaardetijd_in_uren / 16.6355</code>
+
+<p>In de grafiek wordt deze waarde getoond als een paarse horizontale lijn.</p>
+
+<h2>4. Dupliceren en bewaren</h2>
+
+<p>De knop "Dupliceren" (of Ctrl+D) opent een nieuw tabblad met dezelfde instellingen, zodat
+   verschillende schema's naast elkaar vergeleken kunnen worden.</p>
+<p>De instellingen worden ook opgeslagen in het adres van de pagina (het deel na het '#'-teken).
+   Door een bladwijzer te maken, of het adres te kopiëren, kan een schema later opnieuw worden geopend.</p>
+</template>
+
+<!-- ======================================================================
+     4. JAVASCRIPT
+     ====================================================================== -->
+<script>
+"use strict";
+
+// =========================================================================
+// 4.1 Constants and defaults
+// =========================================================================
+
+/** Minutes per day ("etmaal"). The simulation steps one minute at a time. */
+const MINUTES_PER_DAY = 1440;
+
+/** The largest allowed graph end time, in days (as in the Python app). */
+const MAX_GRAPH_END_DAYS = 500;
+
+/**
+ * Default field contents, used when the URL does not specify a value.
+ * These are the same defaults as in the Python app (Application.__init__).
+ */
+const DEFAULT_TEXTS = {
+  halflife:       "160",
+  startAmount:    "0",
+  startupDosages: "4",
+  repeatDosages:  "1-2",
+  graphStart:     "0",
+  graphEnd:       "30",
+};
+
+/**
+ * Names used for each setting in the URL, e.g. "#halfwaardetijd=160&...".
+ * Dutch names keep a shared link readable for the intended users.
+ */
+const URL_KEYS = {
+  halflife:       "halfwaardetijd",
+  startAmount:    "begin",
+  startupDosages: "opstart",
+  repeatDosages:  "herhaal",
+  graphStart:     "van",
+  graphEnd:       "tot",
+};
+
+// =========================================================================
+// 4.2 Number formatting and rounding helpers
+// =========================================================================
+
+/**
+ * Format a number for display, like fmt() in the Python app: whole numbers
+ * without decimals, others with at most 3 decimals and no trailing zeros.
+ * (Unlike the Python version, this also drops a trailing '.', so that
+ * e.g. 2.0004 shows as "2" instead of "2.".)
+ */
+function fmt(x) {
+  if (Number.isInteger(x)) {
+    return String(x);
+  }
+  return x.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+/**
+ * Round to the nearest integer, with ties going to the even neighbour.
+ * This is what Python's round() does; JavaScript's Math.round() would round
+ * ties upwards. Using the same rule keeps the graph identical to the app.
+ */
+function roundHalfEven(x) {
+  const r = Math.round(x);
+  if (Math.abs(x % 1) === 0.5 && r % 2 !== 0) {
+    return r - 1;
+  }
+  return r;
+}
+
+/** Format a tick label without floating-point noise (0.30000000000000004). */
+function formatTick(v) {
+  return String(Number(v.toPrecision(12)));
+}
+
+// =========================================================================
+// 4.3 Model
+//     Same equations as the Python app, so the results match exactly.
+// =========================================================================
+
+/** Mean of a list of doses; 0 for an empty list. */
+function meanDosage(repeatDosages) {
+  if (repeatDosages.length === 0) {
+    return 0.0;
+  }
+  return repeatDosages.reduce((a, b) => a + b, 0) / repeatDosages.length;
+}
+
+/**
+ * Average amount of medicine in the body once the patient is stable on the
+ * repeat schedule:  mean daily dose * (half-life in days) / ln(2).
+ */
+function equilibriumAmount(repeatDosages, halflife) {
+  return (halflife / 24) / Math.LN2 * meanDosage(repeatDosages);
+}
+
+/**
+ * Run the simulation, one step per minute, and return the points to plot.
+ *
+ * At each minute t (from 0 up to and including the graph end):
+ *   - if t is the start of a day, that day's dose is taken: first the
+ *     start-up doses one by one, then the repeat doses, cycling forever;
+ *   - the amount becomes  decay * amount + dose,  where decay is chosen so
+ *     that the amount halves in exactly one half-life.
+ *
+ * If the graph starts at time 0, an extra first point shows the amount
+ * just before the first dose, so the graph begins with a vertical jump.
+ *
+ * @param {object} s  validated settings (see readSettings in 4.8)
+ * @returns {{xs: Float64Array, ys: Float64Array}}  time in days, amount in units
+ */
+function simulate(s) {
+  const t1 = roundHalfEven(s.graphStart * MINUTES_PER_DAY);  // first minute shown
+  const t2 = roundHalfEven(s.graphEnd   * MINUTES_PER_DAY);  // last minute simulated
+
+  const halflifeMinutes = s.halflife * 60.0;
+  const decayFactor = Math.pow(0.5, 1.0 / halflifeMinutes);  // per minute
+
+  // Pre-allocate the output: one point per shown minute, plus the extra point.
+  const extraPoint = (0 >= t1) ? 1 : 0;
+  const n = Math.max(0, t2 - Math.max(t1, 0) + 1) + extraPoint;
+  const xs = new Float64Array(n);
+  const ys = new Float64Array(n);
+  let k = 0;
+
+  let amount = s.startAmount;
+
+  if (extraPoint) {
+    xs[k] = 0.0;
+    ys[k] = s.startAmount;
+    k++;
+  }
+
+  const startup = s.startupDosages;
+  const repeat  = s.repeatDosages;
+
+  for (let t = 0; t <= t2; t++) {
+    let dose = 0.0;
+    if (t % MINUTES_PER_DAY === 0) {
+      const day = t / MINUTES_PER_DAY;
+      if (day < startup.length) {
+        dose = startup[day];
+      } else if (repeat.length !== 0) {
+        dose = repeat[(day - startup.length) % repeat.length];
+      }
+    }
+
+    amount = decayFactor * amount + dose;
+
+    if (t >= t1) {
+      xs[k] = t / MINUTES_PER_DAY;
+      ys[k] = amount;
+      k++;
+    }
+  }
+
+  return { xs, ys };
+}
+
+// =========================================================================
+// 4.4 Parsing and validation
+//     Same rules as the Python app, except that a decimal comma is also
+//     accepted. Negative numbers and exponents are not accepted.
+// =========================================================================
+
+/** One number: digits, optionally followed by '.' or ',' and more digits. */
+const FLOAT_RE = "[0-9]+(?:[.,][0-9]+)?";
+
+/** A whole field holding one number. */
+const FLOAT_PATTERN = new RegExp(`^${FLOAT_RE}$`);
+
+/** A whole field holding zero or more numbers separated by '-'. */
+const FLOAT_LIST_PATTERN = new RegExp(`^(?:${FLOAT_RE}(?:-${FLOAT_RE})*)?$`);
+
+/** Convert "4,5" or "4.5" to the number 4.5. */
+function toNumber(s) {
+  return Number(s.replace(",", "."));
+}
+
+/*
+ * The parse functions below return an object { value, error }:
+ *   - for valid input:   value is the parsed result, error is null;
+ *   - for invalid input: value is null, error is a short Dutch explanation
+ *     that is shown under the field.
+ * The optional `check` function performs extra checks on a parsed value;
+ * it returns null if the value is fine, or an error message if not.
+ */
+
+/** Explain why a text is not a valid single number. */
+function explainBadNumber(text) {
+  if (text === "") {
+    return "Vul een getal in.";
+  }
+  if (text.startsWith("-")) {
+    return "Negatieve getallen zijn niet toegestaan.";
+  }
+  return "Geen geldig getal. Gebruik bijvoorbeeld 4 of 4,5.";
+}
+
+/** Explain why a text is not a valid '-'-separated list of numbers. */
+function explainBadList(text) {
+  if (text.startsWith("-")) {
+    return "De lijst mag niet beginnen met een min-teken.";
+  }
+  if (text.endsWith("-")) {
+    return "De lijst mag niet eindigen met een min-teken.";
+  }
+  if (text.includes("--")) {
+    return "Er staan twee min-tekens achter elkaar.";
+  }
+  return "Gebruik getallen gescheiden door een min-teken, bijvoorbeeld 1-2-1,5.";
+}
+
+/** Parse a single number. */
+function parseFloatField(text, check = () => null) {
+  if (!FLOAT_PATTERN.test(text)) {
+    return { value: null, error: explainBadNumber(text) };
+  }
+  const value = toNumber(text);
+  const error = check(value);
+  return (error === null) ? { value, error: null } : { value: null, error };
+}
+
+/**
+ * Parse a '-'-separated list of numbers, e.g. "1-2-1.5". An empty text is
+ * an empty list.
+ */
+function parseFloatListField(text, check = () => null) {
+  if (!FLOAT_LIST_PATTERN.test(text)) {
+    return { value: null, error: explainBadList(text) };
+  }
+  const value = (text === "") ? [] : text.split("-").map(toNumber);
+  const error = check(value);
+  return (error === null) ? { value, error: null } : { value: null, error };
+}
+
+// =========================================================================
+// 4.5 Graph drawing
+//     A small hand-written plotter on a <canvas>: axes, grid, labels, the
+//     simulated amount, and a horizontal line at the equilibrium amount.
+// =========================================================================
+
+const graphCanvas   = document.getElementById("graph");
+const overlayCanvas = document.getElementById("graph-overlay");
+const tooltip       = document.getElementById("tooltip");
+
+/** Space (in CSS pixels) around the plot area for tick labels and titles. */
+const MARGIN = { left: 72, right: 20, top: 14, bottom: 48 };
+
+/**
+ * An empty graph: just axes and grid. Shown until the first valid input,
+ * e.g. when a bookmarked address contains an invalid value.
+ */
+const EMPTY_PLOT = {
+  xs: new Float64Array(0),
+  ys: new Float64Array(0),
+  equilibrium: null,        // null: no equilibrium line
+  xMin: 0, xMax: 30, yMax: 1,
+};
+
+/**
+ * What is currently drawn. Kept so the graph can be redrawn on resize or
+ * theme change, and so the hover read-out (4.6) can look up values.
+ */
+let currentPlot = EMPTY_PLOT;   // { xs, ys, equilibrium, xMin, xMax, yMax }
+
+/** Read a colour token from the CSS (section 1.1 / 1.2). */
+function cssColor(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/**
+ * Choose "nice" tick positions (multiples of 1, 2, 2.5 or 5 times a power
+ * of ten) covering [lo, hi], with at most about `maxCount` ticks.
+ */
+function niceTicks(lo, hi, maxCount) {
+  const span = hi - lo;
+  if (!(span > 0) || maxCount < 1) {
+    return [lo];
+  }
+  const rawStep = span / maxCount;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * magnitude).find(s => s >= rawStep);
+  const ticks = [];
+  for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + step * 1e-9; v += step) {
+    ticks.push(v);
+  }
+  return ticks;
+}
+
+/**
+ * Make a canvas match its on-screen size, scaled for high-DPI screens.
+ * Returns a drawing context in CSS-pixel units, plus the size.
+ */
+function prepareCanvas(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  canvas.width  = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w, h, dpr };
+}
+
+/** Functions converting data coordinates to pixel coordinates, and back. */
+function makeTransforms(plot, w, h) {
+  const left = MARGIN.left, right = w - MARGIN.right;
+  const top = MARGIN.top, bottom = h - MARGIN.bottom;
+  return {
+    left, right, top, bottom,
+    xToPx: x => left + (x - plot.xMin) / (plot.xMax - plot.xMin) * (right - left),
+    yToPx: y => bottom - y / plot.yMax * (bottom - top),
+    pxToX: px => plot.xMin + (px - left) / (right - left) * (plot.xMax - plot.xMin),
+  };
+}
+
+/** Draw the complete graph for `currentPlot`. */
+function drawGraph() {
+  const { ctx, w, h, dpr } = prepareCanvas(graphCanvas);
+  ctx.clearRect(0, 0, w, h);
+  if (!currentPlot) {
+    return;
+  }
+  const plot = currentPlot;
+  const T = makeTransforms(plot, w, h);
+  if (T.right <= T.left || T.bottom <= T.top) {
+    return;   // window too small to draw anything sensible
+  }
+
+  const axisColor = cssColor("--graph-axis");
+  ctx.font = "12px system-ui, sans-serif";
+  ctx.lineWidth = 1;
+
+  // ---- Grid lines and tick labels ---------------------------------------
+  const xTicks = niceTicks(plot.xMin, plot.xMax, Math.max(2, Math.floor((T.right - T.left) / 70)));
+  const yTicks = niceTicks(0, plot.yMax, Math.max(2, Math.floor((T.bottom - T.top) / 40)));
+
+  ctx.strokeStyle = cssColor("--graph-grid");
+  ctx.setLineDash([2, 3]);
+  ctx.beginPath();
+  for (const x of xTicks) {
+    const px = Math.round(T.xToPx(x)) + 0.5;   // +0.5: crisp 1-pixel lines
+    ctx.moveTo(px, T.top);
+    ctx.lineTo(px, T.bottom);
+  }
+  for (const y of yTicks) {
+    const py = Math.round(T.yToPx(y)) + 0.5;
+    ctx.moveTo(T.left, py);
+    ctx.lineTo(T.right, py);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = axisColor;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  for (const x of xTicks) {
+    ctx.fillText(formatTick(x), T.xToPx(x), T.bottom + 5);
+  }
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  for (const y of yTicks) {
+    ctx.fillText(formatTick(y), T.left - 6, T.yToPx(y));
+  }
+
+  // ---- Axis titles ------------------------------------------------------
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.fillText("tijd [etmalen]", (T.left + T.right) / 2, h - 4);
+
+  ctx.save();
+  ctx.translate(14, (T.top + T.bottom) / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textBaseline = "middle";
+  ctx.fillText("hoeveelheid medicijn in lichaam [eenheden]", 0, 0);
+  ctx.restore();
+
+  // ---- Clip to the plot area for the data lines -------------------------
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(T.left, T.top, T.right - T.left, T.bottom - T.top);
+  ctx.clip();
+
+  // Equilibrium line (magenta, like matplotlib's 'm').
+  if (plot.equilibrium !== null) {
+    ctx.strokeStyle = cssColor("--graph-eq");
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    const eqPx = T.yToPx(plot.equilibrium);
+    ctx.moveTo(T.left, eqPx);
+    ctx.lineTo(T.right, eqPx);
+    ctx.stroke();
+  }
+
+  // Simulated amount.
+  ctx.strokeStyle = cssColor("--graph-line");
+  ctx.lineWidth = 1.5;
+  ctx.lineJoin = "round";
+  drawDecimatedLine(ctx, plot.xs, plot.ys, T, dpr);
+
+  ctx.restore();
+
+  // ---- Frame around the plot area ---------------------------------------
+  ctx.strokeStyle = axisColor;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(Math.round(T.left) + 0.5, Math.round(T.top) + 0.5,
+                 Math.round(T.right - T.left), Math.round(T.bottom - T.top));
+}
+
+/**
+ * Draw a line through many points efficiently.
+ *
+ * A 500-day graph has 720,000 points, far more than there are pixels. For
+ * each column of screen pixels we only draw the first, lowest, highest and
+ * last value in that column. The result looks exactly the same as drawing
+ * every point, but is much faster.
+ */
+function drawDecimatedLine(ctx, xs, ys, T, dpr) {
+  const n = xs.length;
+  if (n === 0) {
+    return;
+  }
+  ctx.beginPath();
+  let column = null;          // current device-pixel column
+  let colPx, first, lo, hi, last;
+  let started = false;
+
+  const flush = () => {
+    const pts = [first, lo, hi, last];
+    for (const y of pts) {
+      const py = T.yToPx(y);
+      if (!started) { ctx.moveTo(colPx, py); started = true; }
+      else          { ctx.lineTo(colPx, py); }
+    }
+  };
+
+  for (let i = 0; i < n; i++) {
+    const px = T.xToPx(xs[i]);
+    const c = Math.floor(px * dpr);
+    const y = ys[i];
+    if (c !== column) {
+      if (column !== null) {
+        flush();
+      }
+      column = c;
+      colPx = px;
+      first = lo = hi = last = y;
+    } else {
+      if (y < lo) lo = y;
+      if (y > hi) hi = y;
+      last = y;
+    }
+  }
+  flush();
+  ctx.stroke();
+}
+
+/** Store new simulation results and redraw. */
+function setPlot(xs, ys, equilibrium, xMin, xMax) {
+  let maxY = equilibrium;
+  for (let i = 0; i < ys.length; i++) {
+    if (ys[i] > maxY) maxY = ys[i];
+  }
+  // Same vertical range as the Python app: from 0 to 105% of the highest
+  // value, rounded up to a whole number. (At least 1, so an all-zero graph
+  // still has a usable axis.)
+  const yMax = Math.max(1, Math.ceil(maxY * 1.05));
+  currentPlot = { xs, ys, equilibrium, xMin, xMax, yMax };
+  drawGraph();
+  drawHover();   // keep the hover marker in place, with the new values
+}
+
+// =========================================================================
+// 4.6 Hover read-out
+//     While the mouse is over the graph, a marker and a small label show
+//     the time and amount at that position. They are drawn on a separate,
+//     transparent canvas on top of the graph, so the graph itself does not
+//     need to be redrawn when the mouse moves.
+// =========================================================================
+
+let hoverPx = null;   // mouse x position in CSS pixels, or null if not hovering
+
+/** Find the index of the point whose time is closest to `x` (binary search). */
+function nearestIndex(xs, x) {
+  let lo = 0, hi = xs.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (xs[mid] <= x) lo = mid; else hi = mid;
+  }
+  // Of the two neighbours, take the closer one. On a tie (the duplicated
+  // first point at time 0), take the later one, i.e. after the dose.
+  return (Math.abs(xs[hi] - x) <= Math.abs(xs[lo] - x)) ? hi : lo;
+}
+
+/** Describe a time in days as e.g. "dag 3, 06:30". */
+function describeTime(days) {
+  const minutes = Math.round(days * MINUTES_PER_DAY);
+  const day = Math.floor(minutes / MINUTES_PER_DAY);
+  const minuteOfDay = minutes - day * MINUTES_PER_DAY;
+  const hh = String(Math.floor(minuteOfDay / 60)).padStart(2, "0");
+  const mm = String(minuteOfDay % 60).padStart(2, "0");
+  return `dag ${day}, ${hh}:${mm}`;
+}
+
+/** Draw (or clear) the hover marker and label. */
+function drawHover() {
+  const { ctx, w, h } = prepareCanvas(overlayCanvas);
+  ctx.clearRect(0, 0, w, h);
+  tooltip.style.display = "none";
+
+  if (hoverPx === null || !currentPlot || currentPlot.xs.length === 0) {
+    return;
+  }
+  const plot = currentPlot;
+  const T = makeTransforms(plot, w, h);
+  if (hoverPx < T.left || hoverPx > T.right) {
+    return;
+  }
+
+  const i = nearestIndex(plot.xs, T.pxToX(hoverPx));
+  const x = plot.xs[i], y = plot.ys[i];
+  const px = T.xToPx(x), py = T.yToPx(y);
+
+  // Vertical guide line and a dot on the curve.
+  const color = cssColor("--graph-hover");
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(px, T.top);
+  ctx.lineTo(px, T.bottom);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(px, py, 4, 0, 2 * Math.PI);
+  ctx.fill();
+
+  // Text label, placed next to the dot and kept inside the graph area.
+  tooltip.textContent = `${describeTime(x)} — ${fmt(y)} eenheden`;
+  tooltip.style.display = "block";
+  const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+  let left = px + 10;
+  if (left + tw > T.right) left = px - 10 - tw;
+  let top = py - th - 8;
+  if (top < T.top) top = py + 8;
+  tooltip.style.left = `${Math.max(0, left)}px`;
+  tooltip.style.top  = `${top}px`;
+}
+
+overlayCanvas.addEventListener("mousemove", (event) => {
+  hoverPx = event.offsetX;
+  drawHover();
+});
+overlayCanvas.addEventListener("mouseleave", () => {
+  hoverPx = null;
+  drawHover();
+});
+
+// =========================================================================
+// 4.7 Settings in the URL
+//     The text of each input field is kept in the part of the address after
+//     '#'. This lets "Dupliceren" open a new tab with the same settings, and
+//     lets the user bookmark a scenario.
+// =========================================================================
+
+/** Build the '#...' part of the URL from a set of field texts. */
+function textsToHash(texts) {
+  const params = new URLSearchParams();
+  for (const key of Object.keys(URL_KEYS)) {
+    params.set(URL_KEYS[key], texts[key]);
+  }
+  return "#" + params.toString();
+}
+
+/** Read field texts from the current URL; missing values get defaults. */
+function textsFromHash() {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const texts = {};
+  for (const key of Object.keys(URL_KEYS)) {
+    const value = params.get(URL_KEYS[key]);
+    texts[key] = (value !== null) ? value : DEFAULT_TEXTS[key];
+  }
+  return texts;
+}
+
+/** Put field texts in the URL, without adding a browser-history entry. */
+function storeTextsInUrl(texts) {
+  try {
+    history.replaceState(null, "", textsToHash(texts));
+  } catch (e) {
+    // Some browsers restrict this for local files; the app still works.
+  }
+}
+
+// =========================================================================
+// 4.8 User interface: reading fields, colouring, updating
+// =========================================================================
+
+/** The input fields, by setting name. */
+const fields = {
+  halflife:       document.getElementById("halflife"),
+  startAmount:    document.getElementById("start-amount"),
+  startupDosages: document.getElementById("startup-dosages"),
+  repeatDosages:  document.getElementById("repeat-dosages"),
+  graphStart:     document.getElementById("graph-start"),
+  graphEnd:       document.getElementById("graph-end"),
+};
+
+/**
+ * The error hints shown under each input field, by setting name. Each hint
+ * element has the id "<field id>-error" (e.g. "halflife-error"), and is
+ * linked to its field with aria-describedby so screen readers announce it.
+ */
+const errorHints = {};
+for (const key of Object.keys(fields)) {
+  errorHints[key] = document.getElementById(fields[key].id + "-error");
+  fields[key].setAttribute("aria-describedby", errorHints[key].id);
+}
+
+/** The read-only fields with calculated values. */
+const repeatMeanField        = document.getElementById("repeat-mean");
+const repeatEquilibriumField = document.getElementById("repeat-equilibrium");
+
+/**
+ * The field texts of the most recent fully valid input. "Dupliceren" uses
+ * these, like good_settings in the Python app.
+ */
+let goodTexts = null;
+
+/** Current text of every input field. */
+function currentTexts() {
+  const texts = {};
+  for (const key of Object.keys(fields)) {
+    texts[key] = fields[key].value.trim();
+  }
+  return texts;
+}
+
+/**
+ * Parse and validate all fields. The rules are the same as in the Python
+ * app. Returns two objects with the same keys as `fields`:
+ *   values: the parsed value of each field, or null if invalid;
+ *   errors: an explanation for each invalid field, or null if valid.
+ * (Negative numbers are already rejected by the number pattern, so no
+ * separate check is needed for them.)
+ */
+function readSettings(texts) {
+  const results = {
+    halflife:       parseFloatField(texts.halflife,
+                      x => (x > 0.0) ? null : "De halfwaardetijd moet groter zijn dan 0."),
+    startAmount:    parseFloatField(texts.startAmount),
+    startupDosages: parseFloatListField(texts.startupDosages),
+    repeatDosages:  parseFloatListField(texts.repeatDosages),
+    graphStart:     parseFloatField(texts.graphStart),
+    graphEnd:       parseFloatField(texts.graphEnd,
+                      x => (x <= MAX_GRAPH_END_DAYS) ? null : `Maximaal ${MAX_GRAPH_END_DAYS} etmalen.`),
+  };
+
+  // The start time must lie before the end time; if not, both are invalid.
+  const start = results.graphStart, end = results.graphEnd;
+  if (start.value !== null && end.value !== null && !(start.value < end.value)) {
+    results.graphStart = { value: null, error: "De start-tijd moet kleiner zijn dan de eind-tijd." };
+    results.graphEnd   = { value: null, error: "De eind-tijd moet groter zijn dan de start-tijd." };
+  }
+
+  const values = {}, errors = {};
+  for (const key of Object.keys(results)) {
+    values[key] = results[key].value;
+    errors[key] = results[key].error;
+  }
+  return { values, errors };
+}
+
+/**
+ * Called after every change to an input field: validate, colour the fields,
+ * show error hints, update the calculated values, and — if everything is
+ * valid — the graph.
+ */
+function update() {
+  const texts = currentTexts();
+  const { values: s, errors } = readSettings(texts);
+
+  // Green for valid fields, red for invalid ones, with a hint under each
+  // invalid field explaining what is wrong.
+  for (const key of Object.keys(fields)) {
+    fields[key].classList.toggle("bad", s[key] === null);
+    errorHints[key].textContent = errors[key] || "";
+  }
+
+  // Calculated values (shown even if other fields are invalid).
+  const mean = (s.repeatDosages === null) ? null : meanDosage(s.repeatDosages);
+  const equilibrium = (s.repeatDosages === null || s.halflife === null)
+    ? null : equilibriumAmount(s.repeatDosages, s.halflife);
+
+  repeatMeanField.value = (mean === null) ? "" : fmt(mean);
+  repeatMeanField.classList.toggle("bad", mean === null);
+  repeatEquilibriumField.value = (equilibrium === null) ? "" : fmt(equilibrium);
+  repeatEquilibriumField.classList.toggle("bad", equilibrium === null);
+
+  // Keep the half-life drop-down in step with the half-life field.
+  syncPreset(s.halflife);
+
+  // Only redraw the graph if every field is valid.
+  if (Object.values(s).every(v => v !== null)) {
+    goodTexts = texts;
+    storeTextsInUrl(texts);
+    const { xs, ys } = simulate(s);
+    setPlot(xs, ys, equilibrium, s.graphStart, s.graphEnd);
+  }
+}
+
+/** Fill the input fields from a set of texts, then update everything. */
+function loadTexts(texts) {
+  for (const key of Object.keys(fields)) {
+    fields[key].value = texts[key];
+  }
+  update();
+}
+
+for (const field of Object.values(fields)) {
+  field.addEventListener("input", update);
+}
+
+// =========================================================================
+// 4.9 Actions
+// =========================================================================
+
+// ---- Dupliceren: open a new tab with the last valid settings ------------
+function duplicate() {
+  const texts = goodTexts || currentTexts();
+  const base = window.location.href.split("#")[0];
+  window.open(base + textsToHash(texts), "_blank");
+}
+
+document.getElementById("duplicate-button").addEventListener("click", duplicate);
+
+// Ctrl+D (Cmd+D on a Mac). Normally this makes a bookmark; on this page it
+// duplicates instead, like in the Python app.
+document.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey &&
+      event.key.toLowerCase() === "d") {
+    event.preventDefault();
+    duplicate();
+  }
+});
+
+// ---- Uitleg: open the manual (section 3) in a new tab ---------------------
+// The manual is turned into a separate page held in memory (a "blob"), and
+// the link points at it. This works without any extra files.
+(function setUpManualLink() {
+  const manualBody = document.getElementById("manual").innerHTML;
+  const page = "<!DOCTYPE html><html lang=\"nl\"><head><meta charset=\"utf-8\">" +
+               "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+               "<title>Uitleg — Basic Medicine Halflife Model</title></head><body>" +
+               manualBody + "</body></html>";
+  const blob = new Blob([page], { type: "text/html;charset=utf-8" });
+  document.getElementById("manual-link").href = URL.createObjectURL(blob);
+})();
+
+// ---- Half-life presets -----------------------------------------------------
+const presetSelect = document.getElementById("halflife-preset");
+
+presetSelect.addEventListener("change", () => {
+  if (presetSelect.value !== "") {
+    fields.halflife.value = presetSelect.value;
+    update();
+  }
+});
+
+/** Select the matching medicine in the drop-down, or none if no match. */
+function syncPreset(halflife) {
+  const match = [...presetSelect.options].find(o => o.value !== "" && Number(o.value) === halflife);
+  presetSelect.value = match ? match.value : "";
+}
+
+// =========================================================================
+// 4.10 Start-up
+// =========================================================================
+
+// Redraw when the graph area changes size (window resize, zoom, ...).
+new ResizeObserver(() => {
+  drawGraph();
+  drawHover();
+}).observe(document.getElementById("graph-container"));
+
+// Redraw when the browser switches between light and dark mode.
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  drawGraph();
+  drawHover();
+});
+
+// If the user edits the address by hand, load the new settings.
+window.addEventListener("hashchange", () => loadTexts(textsFromHash()));
+
+// Fill the fields from the URL (or the defaults) and draw the first graph.
+// The explicit drawGraph() makes sure the empty axes appear right away
+// when the input is not valid (a valid input already draws the graph).
+loadTexts(textsFromHash());
+drawGraph();
+</script>
+</body>
+</html>

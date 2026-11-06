@@ -84,6 +84,9 @@ def fmt(x) -> str:
     s = f"{x:.3f}"
     while s.endswith("0"):
         s = s[:-1]
+    # A value like 2.0004 rounds to "2.000", which is now "2."; drop the dot.
+    if s.endswith("."):
+        s = s[:-1]
     return s
 
 
@@ -129,7 +132,7 @@ class CalculationsWidget(QWidget):
         self.halflife_widget = QLineEdit(str(settings.halflife))
         self.start_amount_widget = QLineEdit(str(settings.start_amount))
         self.startup_dosages_widget = QLineEdit("-".join(map(str, settings.startup_dosages)))
-        self.repeat_dosages_widget = QLineEdit("-".join(map(str, settings.startup_dosages)))
+        self.repeat_dosages_widget = QLineEdit("-".join(map(str, settings.repeat_dosages)))
         self.graph_start_time_widget = QLineEdit(str(settings.graph_start_time))
         self.graph_end_time_widget = QLineEdit(str(settings.graph_end_time))
 
