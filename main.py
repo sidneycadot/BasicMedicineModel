@@ -1,72 +1,40 @@
 #! /usr/bin/env python3
 
-import re
+"""Basic Medicine Halflife Model — desktop (PySide6) version.
+
+Shows how the amount of a medicine in the body develops over time, given its
+half-life and a daily dosing schedule. The model itself (parsing, validation,
+simulation) lives in model.py; this file contains only the user interface.
+
+The web version (web/index.html) offers the same functionality in a browser.
+Keep both versions in sync when making changes.
+"""
+
 import sys
-from typing import NamedTuple, Optional
+from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import Qt
-
 from matplotlib.backends.backend_qtagg import FigureCanvas
 from matplotlib.figure import Figure
+from PySide6.QtCore import Qt, QPoint
+from PySide6.QtGui import QPalette, QColor, QAction, QKeySequence
+from PySide6.QtWidgets import (QApplication, QComboBox, QLabel, QLineEdit, QMainWindow, QTabWidget,
+                               QTextEdit, QWidget)
 
-from PySide6.QtGui import QPalette, QColor, QAction
-from PySide6.QtWidgets import QApplication, QWidget, QLineEdit, QMainWindow, QTabWidget, QTextEdit
+import model
+from layout_utilities import Span, grid_layout, vbox_layout, hbox_layout
 
-from layout_utilities import grid_layout, vbox_layout, hbox_layout
+MANUAL_PATH = Path(__file__).resolve().parent / "manual.html"
 
-
-def mean_dosage(repeat_dosages: list[float]) -> float:
-    if len(repeat_dosages) == 0:
-        return 0.0
-    return sum(repeat_dosages) / len(repeat_dosages)
-
-
-def equilibrium_amount(repeat_dosages: list[float], halflife: float) -> float:
-    """Gemiddelde hoeveelheid werkzame stof in lichaam na bereiken evenwicht."""
-    return (halflife / 24) / np.log(2) * mean_dosage(repeat_dosages)
+# Graph colours (matplotlib defaults: 'C0' blue and 'm' magenta).
+GRAPH_LINE_COLOR = "#1f77b4"
+GRAPH_EQUILIBRIUM_COLOR = "#bf00bf"
+GRAPH_HOVER_COLOR = "#ff7f0e"
 
 
-class SimulationSettings(NamedTuple):
-    halflife: float               # halflife, in HOURS
-    start_amount: float           # start amount, in UNITS
-    startup_dosages: list[float]  # start dosages, in UNITS
-    repeat_dosages: list[float]   # repeat dosages, in UNITS
-    graph_start_time: float       # graph start time, in DAYS (24 hours)
-    graph_end_time: float         # graph end time, in DAYS (24 hours)
-
-    def equilibrium(self):
-        """Gemiddelde hoeveelheid werkzame stof in lichaam na bereiken evenwicht."""
-        return equilibrium_amount(self.repeat_dosages, self.halflife)
-
-
-DecimalDigit = "(?:[0-9]+)"
-NonEmptyDecimalDigitSequence = f"(?:{DecimalDigit}+)"
-Float = f"(?:{NonEmptyDecimalDigitSequence}(?:[.]{NonEmptyDecimalDigitSequence})?)"
-NonEmptyFloatList = f"(?:{Float}(?:[-]{Float})*)"
-PossiblyEmptyFloatList = f"(?:{NonEmptyFloatList}?)"
-
-float_pattern = re.compile(Float)
-float_list_pattern = re.compile(PossiblyEmptyFloatList)
-
-
-def parse_and_validate_float(s: str, validate_func) -> Optional[float]:
-    if float_pattern.fullmatch(s) is not None:
-        value = float(s)
-        if validate_func(value):
-            return value
-    return None
-
-
-def parse_and_validate_float_list(s: str, validate_func) -> Optional[list[float]]:
-    if float_list_pattern.fullmatch(s) is not None:
-        if len(s) == 0:
-            value = []
-        else:
-            value = [float(x) for x in s.split("-")]
-        if validate_func(value):
-            return value
-    return None
+def is_dark_mode() -> bool:
+    """True if the application uses a dark colour scheme."""
+    return QApplication.instance().palette().color(QPalette.Window).lightness() < 128
 
 
 def set_widget_background_color(widget, color) -> None:
@@ -76,286 +44,306 @@ def set_widget_background_color(widget, color) -> None:
     widget.setPalette(palette)
 
 
-def fmt(x) -> str:
-    """Format number as integer or float string."""
-    if x.is_integer():
-        return str(int(x))
-
-    s = f"{x:.3f}"
-    while s.endswith("0"):
-        s = s[:-1]
-    # A value like 2.0004 rounds to "2.000", which is now "2."; drop the dot.
-    if s.endswith("."):
-        s = s[:-1]
-    return s
-
-
 class PassiveLineEdit(QLineEdit):
+    """A read-only field for calculated values."""
     def __init__(self):
         super().__init__()
         self.setReadOnly(True)
+        self.setFocusPolicy(Qt.NoFocus)
         self.setAlignment(Qt.AlignCenter)
 
 
+class ErrorLabel(QLabel):
+    """A hint under an invalid field, explaining what is wrong.
+    It is hidden (and takes no space) while there is no error."""
+    def __init__(self):
+        super().__init__()
+        color = "#ff8a8a" if is_dark_mode() else "#b00020"
+        self.setStyleSheet(f"color: {color}; font-size: small;")
+        self.set_error(None)
+
+    def set_error(self, error) -> None:
+        self.setText(error or "")
+        self.setVisible(error is not None)
+
+
 class ExplanationWidget(QTextEdit):
-
-    with open("manual.html") as fi:
-        html = fi.read()
-
+    """The manual ("Uitleg"), read from manual.html next to this script."""
     def __init__(self):
         super().__init__()
         self.setReadOnly(True)
-        self.setHtml(self.html)
+        try:
+            html = MANUAL_PATH.read_text(encoding="utf-8")
+        except OSError as exception:
+            html = f"<p>De uitleg kon niet worden geladen ({MANUAL_PATH}):<br>{exception}</p>"
+        self.setHtml(html)
 
 
 class CalculationsWidget(QWidget):
+    """The 'Berekening' tab: input fields, calculated values, and the graph."""
 
     color_good = QColor("#ccffcc")
     color_good_static = QColor("#eeeeff")
     color_bad = QColor("#ffcccc")
 
-    def __init__(self, settings: SimulationSettings):
+    def __init__(self, texts: dict[str, str]):
         super().__init__()
 
-        self.good_settings = settings
+        # The field texts of the most recent fully valid input; used by "Dupliceren".
+        self.good_texts = dict(texts)
 
-        self.fig = Figure()
-        self.axes = self.fig.add_axes(rect=(0.12, 0.12, 0.82, 0.82))
-        (self.graph_plotline,) = self.axes.plot([], [])
-        self.axes.set_xlabel("tijd [etmalen]")
-        self.hline = self.axes.axhline(np.nan, c='m')
-        self.axes.set_ylabel("hoeveelheid medicijn in lichaam [eenheden]")
-        self.axes.grid()
+        # The data currently plotted, used by the hover read-out.
+        self.plot_x = np.empty(0)
+        self.plot_y = np.empty(0)
+        self.hover_index = None
 
-        self.plot_canvas = FigureCanvas(self.fig)
+        self._make_graph()
 
-        self.halflife_widget = QLineEdit(str(settings.halflife))
-        self.start_amount_widget = QLineEdit(str(settings.start_amount))
-        self.startup_dosages_widget = QLineEdit("-".join(map(str, settings.startup_dosages)))
-        self.repeat_dosages_widget = QLineEdit("-".join(map(str, settings.repeat_dosages)))
-        self.graph_start_time_widget = QLineEdit(str(settings.graph_start_time))
-        self.graph_end_time_widget = QLineEdit(str(settings.graph_end_time))
+        # ---- Input fields, one per setting (keys as in model.DEFAULT_TEXTS) ----
+        self.fields = {key: QLineEdit(texts[key]) for key in model.DEFAULT_TEXTS}
+        self.error_labels = {key: ErrorLabel() for key in model.DEFAULT_TEXTS}
 
+        for field in self.fields.values():
+            field.setMinimumWidth(60)
+            field.setMaximumWidth(120)
+            field.textEdited.connect(self.validate_settings_and_update_gui_if_ok)
+
+        self.fields["halflife"].setToolTip("Acenocoumarol: 8 tot 14 uur, gemiddeld 11 uur\n"
+                                           "Warfarine: 38 tot 42 uur, gemiddeld 40 uur\n"
+                                           "Fenprocoumon: 120 tot 200 uur, gemiddeld 160 uur")
+
+        # ---- Half-life presets -------------------------------------------------
+        self.preset_combobox = QComboBox()
+        self.preset_combobox.setToolTip("Kies de gemiddelde halfwaardetijd van een medicijn")
+        self.preset_combobox.addItem("medicijn…", None)
+        for name, halflife in model.HALFLIFE_PRESETS:
+            self.preset_combobox.addItem(name, halflife)
+        # 'activated' fires only on a user choice, not when the program changes it.
+        self.preset_combobox.activated.connect(self.handle_preset_chosen)
+
+        # ---- Calculated values -------------------------------------------------
         self.repeat_dosages_mean_widget = PassiveLineEdit()
         self.repeat_dosages_equilibrium_widget = PassiveLineEdit()
-
-        self.halflife_widget.setToolTip("Acenocoumarol: 8 tot 14 uur, gemiddeld 11 uur\n"
-                                        "Warfarine: 38 tot 42 uur, gemiddeld 40 uur\n"
-                                        "Fenprocoumon: 120 tot 200 uur, gemiddeld 160 uur")
-
-        edit_widgets = (self.halflife_widget,
-                        self.start_amount_widget,
-                        self.startup_dosages_widget,
-                        self.repeat_dosages_widget,
-                        self.graph_start_time_widget,
-                        self.graph_end_time_widget)
-
-        for widget in edit_widgets:
-            widget.setMinimumWidth(60)
-            widget.setMaximumWidth(120)
-            widget.textEdited.connect(self.validate_settings_and_update_gui_if_ok)
-
-        show_widgets = (self.repeat_dosages_mean_widget,
-                        self.repeat_dosages_equilibrium_widget)
-
-        for widget in show_widgets:
+        for widget in (self.repeat_dosages_mean_widget, self.repeat_dosages_equilibrium_widget):
             widget.setMinimumWidth(60)
             widget.setMaximumWidth(120)
 
-        action = QAction("Duplicate")
-        action.setShortcut(Qt.CTRL | Qt.Key_D)
-        action.triggered.connect(self.handle_duplicate_action)
-        self.addAction(action)
+        # ---- Layout -----------------------------------------------------------
+        def field_rows(key, label, unit):
+            """A row with label, field and unit, and a row for the error hint."""
+            return [
+                [f"  {label}", self.fields[key], unit],
+                [None, Span(self.error_labels[key], 2)],
+            ]
 
-        # Keep a reference.
-        self.action = action
+        rows = [["<b>Invoervelden</b>"]]
+        rows += field_rows("halflife", "Halfwaardetijd medicijn",
+                           hbox_layout("uren", self.preset_combobox, "*stretch*"))
+        rows += field_rows("start_amount", "Hoeveelheid medicijn in lichaam voor eerste inname", "eenheden")
+        rows += field_rows("startup_dosages", "Opstart-doseringen", "eenheden per etmaal")
+        rows += field_rows("repeat_dosages", "Herhaal-doseringen", "eenheden per etmaal")
+        rows += field_rows("graph_start", "Grafiek start-tijd", "etmalen")
+        rows += field_rows("graph_end", "Grafiek eind-tijd", "etmalen")
+        rows += [
+            [""],
+            ["<b>Berekende waarden</b>"],
+            ["  Gemiddelde herhaal-dosering", self.repeat_dosages_mean_widget, "eenheden per etmaal"],
+            ["  Gemiddelde hoeveelheid medicijn in lichaam na inregelen",
+             self.repeat_dosages_equilibrium_widget, "eenheden"],
+            [""],
+        ]
 
         layout = vbox_layout(
-            "*stretch*",
-            hbox_layout(
-                "*stretch*",
-                grid_layout(
-                    ["<b>Invoervelden</b>"],
-                    ["  Halfwaardetijd medicijn", self.halflife_widget, "uren"],
-                    ["  Hoeveelheid medicijn in lichaam voor eerste inname", self.start_amount_widget, "eenheden"],
-                    ["  Opstart-doseringen", self.startup_dosages_widget, "eenheden per etmaal"],
-                    ["  Herhaal-doseringen", self.repeat_dosages_widget, "eenheden per etmaal"],
-                    ["  Grafiek start-tijd", self.graph_start_time_widget, "etmalen"],
-                    ["  Grafiek eind-tijd", self.graph_end_time_widget, "etmalen"],
-                    [""],
-                    ["<b>Berekende waarden</b>"],
-                    ["  Gemiddelde herhaal-dosering", self.repeat_dosages_mean_widget, "eenheden per etmaal"],
-                    ["  Gemiddelde hoeveelheid medicijn in lichaam na inregelen", self.repeat_dosages_equilibrium_widget, "eenheden"],
-                    [""]
-                ),
-                "*stretch*"
-            ),
-            "*stretch*",
+            hbox_layout("*stretch*", grid_layout(*rows), "*stretch*"),
             self.plot_canvas
         )
-
+        layout.setStretch(1, 1)   # the graph gets all extra space
         self.setLayout(layout)
 
         self.validate_settings_and_update_gui_if_ok()
 
-    def validate_settings_and_update_gui_if_ok(self):
+    # ---- Graph ------------------------------------------------------------------
 
-        halflife = parse_and_validate_float(self.halflife_widget.text(), lambda x: x > 0.0)
-        start_amount = parse_and_validate_float(self.start_amount_widget.text(), lambda x: x >= 0.0)
-        startup_dosages = parse_and_validate_float_list(self.startup_dosages_widget.text(), lambda xlist: all(x >= 0.0 for x in xlist))
-        repeat_dosages = parse_and_validate_float_list(self.repeat_dosages_widget.text(), lambda xlist: all(x >= 0.0 for x in xlist))
-        graph_start_time = parse_and_validate_float(self.graph_start_time_widget.text(), lambda x: x >= 0.0)
-        graph_end_time = parse_and_validate_float(self.graph_end_time_widget.text(), lambda x: 0.0 <= x <= 500.0)
+    def _make_graph(self):
+        """Create the figure, the (empty) lines, and the hover marker."""
+        # 'constrained' layout keeps the axis labels visible at any window size.
+        self.fig = Figure(layout="constrained")
+        self.axes = self.fig.add_subplot()
+        (self.graph_plotline,) = self.axes.plot([], [], c=GRAPH_LINE_COLOR)
+        self.hline = self.axes.axhline(np.nan, c=GRAPH_EQUILIBRIUM_COLOR)
+        self.axes.set_xlabel("tijd [etmalen]", fontsize="small")
+        self.axes.set_ylabel("hoeveelheid medicijn in lichaam [eenheden]", fontsize="small")
+        self.axes.grid()
+        # Empty axes until the first valid input (same range as the web version).
+        self.axes.set_xlim(0.0, 30.0)
+        self.axes.set_ylim(0.0, 1.0)
 
-        repeat_dosage_mean = None if repeat_dosages is None else mean_dosage(repeat_dosages)
-        repeat_dosage_equilibrium = None if repeat_dosages is None or halflife is None else equilibrium_amount(repeat_dosages, halflife)
+        # Hover read-out: a vertical line, a dot on the curve, and a label.
+        self.hover_line = self.axes.axvline(0.0, c=GRAPH_HOVER_COLOR, lw=1, visible=False)
+        (self.hover_dot,) = self.axes.plot([], [], "o", c=GRAPH_HOVER_COLOR, ms=6, visible=False)
+        self.hover_text = self.axes.annotate(
+            "", xy=(0, 0), xytext=(10, 10), textcoords="offset points",
+            bbox=dict(boxstyle="round", fc="white", ec="#bbbbbb", alpha=0.95), visible=False)
 
-        if (graph_start_time is not None) and (graph_end_time is not None):
-            if not (graph_start_time < graph_end_time):
-                graph_start_time = None
-                graph_end_time = None
+        self.plot_canvas = FigureCanvas(self.fig)
+        self.plot_canvas.setMinimumHeight(300)
+        self.plot_canvas.mpl_connect("motion_notify_event", self.handle_mouse_move)
+        self.plot_canvas.mpl_connect("figure_leave_event", self.handle_mouse_leave)
 
-        set_widget_background_color(self.halflife_widget, self.color_good if halflife is not None else self.color_bad)
-        set_widget_background_color(self.start_amount_widget, self.color_good if start_amount is not None else self.color_bad)
-        set_widget_background_color(self.startup_dosages_widget, self.color_good if startup_dosages is not None else self.color_bad)
-        set_widget_background_color(self.repeat_dosages_widget, self.color_good if repeat_dosages is not None else self.color_bad)
-        set_widget_background_color(self.graph_start_time_widget, self.color_good if graph_start_time is not None else self.color_bad)
-        set_widget_background_color(self.graph_end_time_widget, self.color_good if graph_end_time is not None else self.color_bad)
+    def update_graph(self, settings: model.SimulationSettings):
+        x, y = model.simulate(settings)
+        equilibrium = model.equilibrium_amount(settings.repeat_dosages, settings.halflife)
 
-        set_widget_background_color(self.repeat_dosages_mean_widget, self.color_good_static if repeat_dosage_mean is not None else self.color_bad)
-        set_widget_background_color(self.repeat_dosages_equilibrium_widget, self.color_good_static if repeat_dosage_equilibrium is not None else self.color_bad)
-
-        self.repeat_dosages_mean_widget.setText(f"{fmt(repeat_dosage_mean)}" if repeat_dosage_mean is not None else "")
-        self.repeat_dosages_equilibrium_widget.setText(f"{fmt(repeat_dosage_equilibrium)}" if repeat_dosage_equilibrium is not None else "")
-
-        if all(x is not None for x in (halflife, start_amount, startup_dosages, repeat_dosages, graph_start_time, graph_end_time)):
-            settings = SimulationSettings(
-                halflife = halflife,
-                start_amount = start_amount,
-                startup_dosages = startup_dosages,
-                repeat_dosages = repeat_dosages,
-                graph_start_time = graph_start_time,
-                graph_end_time = graph_end_time
-            )
-
-            self.good_settings = settings
-
-            self.update_graph(settings)
-
-
-    def update_graph(self, settings: SimulationSettings):
-
-        t1 = round(settings.graph_start_time * 1440.0)
-        t2 = round(settings.graph_end_time * 1440.0)
-
-        startup_dosages = settings.startup_dosages
-        repeat_dosages = settings.repeat_dosages
-
-        halflife_minutes = settings.halflife * 60.0
-
-        # The decay factor per minute.
-        decay_factor = 0.5 ** (1.0 / halflife_minutes)
-
-        x = []
-        y = []
-
-        amount = settings.start_amount
-
-        if 0 >= t1:
-            x.append(0.0)
-            y.append(settings.start_amount)
-
-        for t in range(0, t2 + 1):
-            if t % 1440 == 0:
-                index = t // 1440
-                if index < len(startup_dosages):
-                    dose = startup_dosages[index]
-                elif len(repeat_dosages) != 0:
-                    index = (index - len(startup_dosages)) % len(repeat_dosages)
-                    dose = repeat_dosages[index]
-                else:
-                    dose = 0.0
-            else:
-                dose = 0.0
-
-            amount = decay_factor * amount + dose
-
-            if t >= t1:
-                x.append(t / 1440.0)
-                y.append(amount)
-
-        x = np.asarray(x)
-        y = np.asarray(y)
-
-        equilibrium = settings.equilibrium()
-
-        self.hline.set_ydata([equilibrium])
-
+        self.plot_x, self.plot_y = x, y
         self.graph_plotline.set_data(x, y)
-        self.axes.relim()
-        self.axes.autoscale()
-        self.axes.set_ylim(0.0, np.ceil(max(np.amax(y), equilibrium) * 1.05))
+        self.hline.set_ydata([equilibrium])
+        self.axes.set_xlim(settings.graph_start, settings.graph_end)
+        self.axes.set_ylim(0.0, model.y_axis_top(max(np.amax(y), equilibrium)))
+
+        # Keep the hover marker at the same time, with the new value.
+        if self.hover_index is not None:
+            self._show_hover(self.hover_line.get_xdata()[0], force=True)
         self.plot_canvas.draw_idle()
 
-    def handle_duplicate_action(self):
-        app = QApplication.instance()
-        app.make_window(self.good_settings)
+    def handle_mouse_move(self, event):
+        if event.inaxes is self.axes and event.xdata is not None:
+            self._show_hover(event.xdata)
+        else:
+            self.handle_mouse_leave(event)
+
+    def handle_mouse_leave(self, event):
+        if self.hover_index is not None:
+            self.hover_index = None
+            for artist in (self.hover_line, self.hover_dot, self.hover_text):
+                artist.set_visible(False)
+            self.plot_canvas.draw_idle()
+
+    def _show_hover(self, xdata: float, force: bool = False):
+        """Show the time and amount at the point closest to time `xdata`."""
+        x, y = self.plot_x, self.plot_y
+        if len(x) == 0:
+            return
+        # Of the two neighbouring points, take the closer one; on a tie (the
+        # duplicated first point at time 0) take the later one, after the dose.
+        hi = int(np.clip(np.searchsorted(x, xdata, side="right"), 1, len(x) - 1)) if len(x) > 1 else 0
+        lo = max(hi - 1, 0)
+        i = hi if abs(x[hi] - xdata) <= abs(x[lo] - xdata) else lo
+        if i == self.hover_index and not force:
+            return   # nothing changed; avoid a needless redraw
+        self.hover_index = i
+
+        self.hover_line.set_xdata([x[i], x[i]])
+        self.hover_dot.set_data([x[i]], [y[i]])
+        self.hover_text.xy = (x[i], y[i])
+        self.hover_text.set_text(f"{model.describe_time(x[i])} — {model.fmt(y[i])} eenheden")
+        # Put the label on the left of the marker in the right half of the graph.
+        x_min, x_max = self.axes.get_xlim()
+        on_right_half = x[i] > (x_min + x_max) / 2
+        self.hover_text.set_position((-10, 10) if on_right_half else (10, 10))
+        self.hover_text.set_horizontalalignment("right" if on_right_half else "left")
+        for artist in (self.hover_line, self.hover_dot, self.hover_text):
+            artist.set_visible(True)
+        self.plot_canvas.draw_idle()
+
+    # ---- Input handling --------------------------------------------------------
+
+    def current_texts(self) -> dict[str, str]:
+        return {key: field.text().strip() for key, field in self.fields.items()}
+
+    def handle_preset_chosen(self, index: int):
+        halflife = self.preset_combobox.itemData(index)
+        if halflife is not None:
+            self.fields["halflife"].setText(model.fmt(halflife))
+            self.validate_settings_and_update_gui_if_ok()
+
+    def validate_settings_and_update_gui_if_ok(self):
+        texts = self.current_texts()
+        values, errors = model.validate(texts)
+
+        # Green for valid fields, red for invalid ones, with a hint under each
+        # invalid field.
+        for key, field in self.fields.items():
+            set_widget_background_color(field, self.color_good if values[key] is not None else self.color_bad)
+            self.error_labels[key].set_error(errors[key])
+
+        # Calculated values (shown even if other fields are invalid).
+        repeat_dosages, halflife = values["repeat_dosages"], values["halflife"]
+        mean = None if repeat_dosages is None else model.mean_dosage(repeat_dosages)
+        equilibrium = (None if repeat_dosages is None or halflife is None
+                       else model.equilibrium_amount(repeat_dosages, halflife))
+
+        for widget, value in ((self.repeat_dosages_mean_widget, mean),
+                              (self.repeat_dosages_equilibrium_widget, equilibrium)):
+            set_widget_background_color(widget, self.color_good_static if value is not None else self.color_bad)
+            widget.setText(model.fmt(value) if value is not None else "")
+
+        # Keep the half-life drop-down in step with the half-life field.
+        index = self.preset_combobox.findData(halflife) if halflife is not None else -1
+        self.preset_combobox.setCurrentIndex(max(index, 0))
+
+        # Only redraw the graph if every field is valid.
+        settings = model.settings_from_values(values)
+        if settings is not None:
+            self.good_texts = texts
+            self.update_graph(settings)
 
 
 class MainWindow(QMainWindow):
 
-    def __init__(self, settings: SimulationSettings):
-
+    def __init__(self, texts: dict[str, str]):
         super().__init__()
         self.setWindowTitle("Basic Medicine Halflife Model")
 
-        explanation_widget = ExplanationWidget()
-
-        calculations_widget = CalculationsWidget(settings)
+        self.calculations_widget = CalculationsWidget(texts)
 
         tab_widget = QTabWidget()
-
-        tab_widget.addTab(calculations_widget, "Berekening")
-        tab_widget.addTab(explanation_widget, "Uitleg")
-
+        tab_widget.addTab(self.calculations_widget, "Berekening")
+        tab_widget.addTab(ExplanationWidget(), "Uitleg")
         self.setCentralWidget(tab_widget)
+
+        # "Dupliceren": a toolbar button and Ctrl+D. The action belongs to the
+        # window, so the shortcut works in both tabs.
+        duplicate_action = QAction("Dupliceren", self)
+        duplicate_action.setShortcut(QKeySequence(Qt.CTRL | Qt.Key_D))
+        duplicate_action.setToolTip("Open een nieuw venster met dezelfde instellingen (Ctrl+D)")
+        duplicate_action.triggered.connect(self.handle_duplicate_action)
+        toolbar = self.addToolBar("Acties")
+        toolbar.setMovable(False)
+        toolbar.addAction(duplicate_action)
+
+    def handle_duplicate_action(self):
+        QApplication.instance().make_window(self.calculations_widget.good_texts, near=self)
 
     def closeEvent(self, event):
         # Report to the application that this window is closing.
-        app = QApplication.instance()
-        app.dispose_window(self)
+        QApplication.instance().dispose_window(self)
+        super().closeEvent(event)
 
 
 class Application(QApplication):
 
-    def __init__(self):
-        super().__init__()
-
-        settings = SimulationSettings(
-            halflife=160.0,
-            start_amount=0.0,
-            startup_dosages=[4.0],
-            repeat_dosages=[1.0, 2.0],
-            graph_start_time=0.0,
-            graph_end_time=30.0
-        )
-
+    def __init__(self, argv):
+        super().__init__(argv)
         self.windows = []
-        self.make_window(settings)
+        self.make_window(model.DEFAULT_TEXTS)
 
-    def make_window(self, settings: SimulationSettings):
-        window = MainWindow(settings)
+    def make_window(self, texts: dict[str, str], near: QMainWindow = None):
+        """Open a new window. If `near` is given, place the new window a bit
+        below and to the right of it, so it is visibly a new window."""
+        window = MainWindow(texts)
+        if near is not None:
+            window.resize(near.size())
+            window.move(near.pos() + QPoint(40, 40))
         window.show()
         self.windows.append(window)
 
     def dispose_window(self, window):
-        self.windows = [w for w in self.windows if w != window]
+        self.windows = [w for w in self.windows if w is not window]
+
 
 def main():
-    app = Application()
-    exitcode = app.exec()
-    if exitcode != 0:
-        sys.exit(exitcode)
+    app = Application(sys.argv)
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
