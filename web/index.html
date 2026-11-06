@@ -20,8 +20,9 @@
 
   FILE LAYOUT
     1. <style>                 — all CSS (colours are variables; light/dark mode)
-    2. <body>                  — the page: input fields, calculated values, graph
-    3. <template id="manual">  — the manual ("Uitleg"), opened in a new tab
+    2. <body>                  — the page: title, tabs, and the "Berekening"
+                                 tab (input fields, calculated values, graph)
+    3. <section id="panel-manual"> — the "Uitleg" tab: the manual
     4. <script>                — all JavaScript, in numbered sections:
          4.1  Constants and defaults
          4.2  Number formatting and rounding helpers
@@ -31,7 +32,7 @@
          4.6  Hover read-out on the graph
          4.7  Settings in the URL (bookmarking, duplicating)
          4.8  User interface: reading fields, colouring, updating
-         4.9  Actions: duplicate (Ctrl+D), manual, half-life presets
+         4.9  Actions: duplicate (Ctrl+D), tabs, half-life presets
          4.10 Start-up
 
   KEEPING IN SYNC WITH THE PYTHON APP
@@ -40,8 +41,7 @@
     one version, change the other too. The intended differences are:
     - Duplicate (button or Ctrl+D) opens a new browser tab instead of a new
       window. The settings travel along in the URL (after the '#'), so a
-      scenario can also be bookmarked or shared (manual section 4).
-    - The manual opens in a new browser tab instead of a tab in the window.
+      scenario can also be bookmarked or shared (manual section 5).
     - Colours follow the browser's light/dark mode.
     - Until the input is valid for the first time, empty axes are shown.
       (The Python app always starts with valid defaults.)
@@ -225,6 +225,34 @@ kbd {
   margin-left: 6px;
 }
 
+/* ---- 1.4b Tabs ("Berekening" / "Uitleg") ------------------------------ */
+[hidden] { display: none !important; }   /* hidden tab panels stay hidden */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: -4px;
+}
+.tabs [role="tab"] {
+  font: inherit;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 6px 6px 0 0;
+  padding: 8px 16px 9px;
+  margin-bottom: -1px;   /* the active underline covers the bar's line */
+  cursor: pointer;
+  transition: none;      /* switch instantly, without the button fade */
+}
+.tabs [role="tab"]:hover { color: var(--fg); background: var(--button-hover); }
+.tabs [role="tab"][aria-selected="true"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
 /* ---- 1.5 Input form (a 3-column grid: label, field, unit) -------------- */
 #form-card { display: flex; justify-content: center; overflow-x: auto; }
 #form {
@@ -314,7 +342,52 @@ select {
   #form .error { grid-column: 1 / -1; }
 }
 
-/* ---- 1.6 Graph --------------------------------------------------------- */
+/* ---- 1.6 Manual ("Uitleg" tab) ---------------------------------------- */
+.manual {
+  max-width: 54em;
+  width: 100%;
+  margin: 0 auto;
+  padding: 28px 36px;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.manual h1 { font-size: 26px; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 16px; }
+.manual h2 {
+  font-size: 20px;
+  margin: 32px 0 8px;
+  padding-top: 20px;
+  border-top: 1px solid var(--card-border);
+}
+.manual h3 { font-size: 17px; margin: 22px 0 6px; color: var(--accent); }
+/* The "Belangrijk" box at the top. */
+.manual .note {
+  margin: 0 0 8px;
+  padding: 12px 16px;
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+}
+/* A formula, set apart from the text. */
+.manual .formula {
+  margin: 0.6em 0;
+  padding: 10px 14px;
+  background: var(--field-static);
+  border-radius: 8px;
+  font-weight: 600;
+  overflow-x: auto;
+}
+/* The small table in section 1.2. */
+.manual table.steady { border-collapse: collapse; margin: 0.6em 0; }
+.manual table.steady th,
+.manual table.steady td {
+  padding: 4px 14px 4px 0;
+  border-bottom: 1px solid var(--card-border);
+  text-align: left;
+}
+.manual table.steady th { color: var(--muted); font-weight: 600; font-size: 14px; }
+@media (max-width: 600px) { .manual { padding: 18px 16px; } }
+
+/* ---- 1.7 Graph --------------------------------------------------------- */
 #graph-card { display: flex; flex-direction: column; gap: 10px; min-height: 380px; }
 .graph-header {
   display: flex;
@@ -392,12 +465,19 @@ select {
   <div class="buttons">
     <button id="duplicate-button" class="primary" type="button"
             title="Open een nieuw tabblad met dezelfde instellingen (Ctrl+D)">Dupliceren<kbd>Ctrl+D</kbd></button>
-    <!-- The href is filled in by the script (section 4.9). -->
-    <a id="manual-link" class="button" target="_blank" rel="noopener">Uitleg</a>
   </div>
 </header>
 
-<main>
+<!-- Tabs, like the Python app. The script (section 4.9) switches between the
+     two panels by setting the 'hidden' attribute. -->
+<nav class="tabs" role="tablist" aria-label="Weergave">
+  <button type="button" role="tab" id="tab-calc" aria-controls="panel-calc"
+          aria-selected="true">Berekening</button>
+  <button type="button" role="tab" id="tab-manual" aria-controls="panel-manual"
+          aria-selected="false" tabindex="-1">Uitleg</button>
+</nav>
+
+<main id="panel-calc" role="tabpanel" aria-labelledby="tab-calc">
 
 <!-- The ids of the input fields are used by the script (section 4.8). -->
 <section id="form-card" class="card">
@@ -422,29 +502,29 @@ select {
   <span class="unit">eenheden</span>
   <div class="error" id="start-amount-error" aria-live="polite"></div>
 
-  <label for="startup-dosages">Opstart-doseringen</label>
+  <label for="startup-dosages">Opstartdoseringen</label>
   <input id="startup-dosages" autocomplete="off">
   <span class="unit">eenheden per etmaal</span>
   <div class="error" id="startup-dosages-error" aria-live="polite"></div>
 
-  <label for="repeat-dosages">Herhaal-doseringen</label>
+  <label for="repeat-dosages">Herhaaldoseringen</label>
   <input id="repeat-dosages" autocomplete="off">
   <span class="unit">eenheden per etmaal</span>
   <div class="error" id="repeat-dosages-error" aria-live="polite"></div>
 
-  <label for="graph-start">Grafiek start-tijd</label>
+  <label for="graph-start">Grafiek begintijd</label>
   <input id="graph-start" inputmode="decimal" autocomplete="off">
   <span class="unit">etmalen</span>
   <div class="error" id="graph-start-error" aria-live="polite"></div>
 
-  <label for="graph-end">Grafiek eind-tijd</label>
+  <label for="graph-end">Grafiek eindtijd</label>
   <input id="graph-end" inputmode="decimal" autocomplete="off">
   <span class="unit">etmalen</span>
   <div class="error" id="graph-end-error" aria-live="polite"></div>
 
   <h2 class="second">Berekende waarden</h2>
 
-  <label for="repeat-mean">Gemiddelde herhaal-dosering</label>
+  <label for="repeat-mean">Gemiddelde herhaaldosering</label>
   <input id="repeat-mean" class="static" readonly tabindex="-1">
   <span class="unit">eenheden per etmaal</span>
 
@@ -476,140 +556,132 @@ select {
 
 <!-- ======================================================================
      3. MANUAL ("Uitleg")
-     The content of this template is not shown on this page. When the user
-     clicks "Uitleg", it is turned into a separate page and opened in a new
-     tab (see section 4.9). It carries its own <style>, which only applies
-     to that page. Text taken from ../manual.html, adjusted for the web version.
+     Shown when the "Uitleg" tab is selected. Text taken from ../manual.html;
+     only section 5 differs (new browser tab instead of new window).
      ====================================================================== -->
-<template id="manual">
-<style>
-  /* Same colours as the main page (section 1.1 / 1.2). */
-  :root {
-    color-scheme: light dark;
-    --bg: #f3f5f9; --card: #ffffff; --card-border: #e2e6ee;
-    --fg: #1b2230; --muted: #667085; --accent: #2563eb; --code-bg: #eef1fb;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #12151b; --card: #1b2029; --card-border: #2a313d;
-      --fg: #e6e9ef; --muted: #98a2b3; --accent: #5b8cff; --code-bg: #212842;
-    }
-  }
-  body {
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    font-size: 16px;
-    line-height: 1.6;
-    margin: 0;
-    padding: 24px 16px;
-    background: var(--bg);
-    color: var(--fg);
-  }
-  /* The text sits on a single centred panel, like the main page. */
-  .page {
-    max-width: 50em;
-    margin: 0 auto;
-    padding: 28px 36px;
-    background: var(--card);
-    border: 1px solid var(--card-border);
-    border-radius: 14px;
-  }
-  h1 { font-size: 30px; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 16px; }
-  h2 { font-size: 21px; margin: 32px 0 8px; padding-top: 20px; border-top: 1px solid var(--card-border); }
-  h3 { font-size: 17px; margin: 22px 0 6px; color: var(--accent); }
-  code {
-    display: block;
-    margin: 0.6em 0;
-    padding: 10px 12px;
-    background: var(--code-bg);
-    border-radius: 8px;
-    font-size: 14px;
-    overflow-x: auto;
-  }
-  @media (max-width: 600px) { .page { padding: 18px 16px; } }
-</style>
-<div class="page">
+<section id="panel-manual" class="card manual" role="tabpanel" aria-labelledby="tab-manual" hidden>
+<h1>Zo werkt het model</h1>
 
-<h1>Uitleg van het programma</h1>
+<p>Dit programma laat zien hoe de hoeveelheid van een medicijn in het lichaam zich in de loop van de tijd
+   ontwikkelt bij een vast dagelijks doseerschema. Het is bedoeld om inzicht te geven in het doseren van
+   medicijnen, in het bijzonder trombosemedicatie.</p>
 
-<p>Dit programma implementeert een eenvoudig model om inzicht te geven in het doseren van medicijnen.</p>
+<aside class="note"><b>Belangrijk:</b> dit programma is een hulpmiddel voor inzicht, geen medisch hulpmiddel. De grafiek toont
+   alleen de hoeveelheid medicijn in het lichaam, <em>niet</em> het effect ervan (zoals de INR). Pas een
+   dosering nooit aan zonder overleg met de arts of de trombosedienst.</aside>
 
-<p>Het model ondersteunt dagelijkse inname van een aantal <i>eenheden</i> van een geneesmiddel, en afname
-   van de hoeveelheid medicijn in het lichaam op basis van een <i>halfwaardetijd</i>.</p>
+<h2>Snel aan de slag</h2>
 
-<h2>1. Uitleg van het model</h2>
+<ol>
+  <li>Kies het medicijn in de keuzelijst naast de halfwaardetijd, of vul zelf een halfwaardetijd in.</li>
+  <li>Vul de opstartdoseringen en de herhaaldoseringen in, bijvoorbeeld <i>4</i> en <i>1-2</i>.</li>
+  <li>Bekijk in de grafiek hoe de hoeveelheid medicijn zich ontwikkelt. De paarse lijn is de gemiddelde
+      hoeveelheid die op den duur wordt bereikt.</li>
+  <li>Beweeg met de muis over de grafiek om de hoeveelheid op een bepaald moment te zien.</li>
+</ol>
 
-<p>Het model berekent de hoeveelheid medicijn in het lichaam van een patiënt door, in stapjes van één minuut,
-   te simuleren wat er met de hoeveelheid medicijn in het lichaam gebeurt.</p>
+<h2>1. Wat berekent het model?</h2>
 
-<p>De simulatie begint met een op te geven hoeveelheid medicijn in het lichaam. Hierna worden tijd-stapjes gezet
-   van elk één minuut, waarbij twee dingen worden gesimuleerd:</p>
+<p>Het model rekent met <i>eenheden</i>. Een eenheid kan elke maat zijn, bijvoorbeeld milligram of tabletten,
+   zolang u overal dezelfde maat gebruikt.</p>
+
+<p>De berekening begint met een op te geven hoeveelheid medicijn in het lichaam. Daarna rekent het model in
+   stapjes van één minuut. In elk stapje gebeuren twee dingen:</p>
 
 <ul>
-  <li>Inname van het medicijn, éénmaal per etmaal, volgens een instelbaar inname-schema. Een etmaal bestaat
-      uit 1440 minuten, dus inname wordt eens per 1440 minuten gedaan. Het effect van de inname is dat
-      de hoeveelheid medicijn in het lichaam onmiddelijk verhoogd wordt met het aantal ingenomen eenheden.</li>
-  <li>Afbraak of afscheiding van het in het lichaam aanwezige medicijn. In het model wordt elke minuut een
-      kleine fractie van de in het lichaam aanwezige stof weggenomen. De fractie is zo gekozen dat, wanneer de
-      hoeveelheid medicijn in het lichaam niet wordt aangevuld door inname, de hoeveelheid medicijn in het
-      lichaam halveert in de door de gebruiker opgegeven halfwaardetijd.</li>
+  <li><b>Inname.</b> Eenmaal per etmaal wordt een dosis ingenomen, volgens het ingestelde schema. De inname
+      gebeurt steeds aan het begin van het etmaal (om 00:00 uur); de dagen worden geteld vanaf dag 0.
+      Bij inname neemt de hoeveelheid in het lichaam meteen toe met de ingenomen dosis.</li>
+  <li><b>Afbraak.</b> Elke minuut wordt een klein deel van het aanwezige medicijn afgebroken of uitgescheiden.
+      Dat deel is zo gekozen dat de hoeveelheid, zonder nieuwe inname, in precies één halfwaardetijd
+      halveert.</li>
 </ul>
 
-<h3>1.1. Beperkingen van het model</h3>
+<p>Daardoor heeft de grafiek een zaagtandvorm: bij elke inname springt de lijn omhoog, en daarna daalt hij
+   geleidelijk tot de volgende inname.</p>
 
-<p>Het hierboven beschreven model kan nuttig inzicht opleveren voor wat betreft dosering van medicijnen,
-   maar het is belangrijk om het goed te gebruiken.</p>
+<h3>1.1. Voorbeeld</h3>
 
-<h3>1.1.1. Wat laat de grafiek precies zien?</h3>
-
-<p>Het is belangrijk om de grafiek die het programma laat zien goed te interpreteren.
-   Wat de grafiek laat zien is alleen hoe de hoeveelheid medicijn in het lichaam door de tijd variëert;
-   <em>het is nadrukkelijk niet een maat voor het gewenste effect van het medicijn!</em></p>
-
-<p>Bij trombose-medicatie zou het bijvoorbeeld heel nuttig zijn om te zien hoe de INR-waarde
-   zich door de tijd ontwikkelt aan de hand van de ingenomen medicijnen, maar dat is niet wat de grafiek
-   laat zien. De INR wordt natuurlijk beïnvloed door de hoeveelheid medicijn in het lichaam, maar hoe
-   dat precies gebeurt is complex, met allerlei metabolische tussenstappen die verschillen per medicijn.
-   Het model wat dit programma gebruikt is veel te simpel om dat soort effecten uit te rekenen.</p>
-
-<h3>1.1.2. Het model is veel simpeler dan de werkelijkheid</h3>
-
-<p>Het menselijk lichaam is erg ingewikkeld en er vinden gelijktijdig veel processen plaats die verband
-   houden met de medicijn-opname en werking. Het model is juist erg eenvoudig. Enkele voorbeelden waarin
-   het model verschilt van de werkelijkheid:</p>
+<p>Bij de standaardinstellingen (opstartdosering <i>4</i>, herhaaldoseringen <i>1-2</i>) wordt het volgende
+   ingenomen:</p>
 
 <ul>
-  <li>Het model ziet het lichaam als één geheel waar het medicijn in zit. In werkelijkheid
-      komen medicijnen het lichaam binnen via de maag of bloedbaan, en kost het tijd om het medicijn
-      op de plek te krijgen waar het zijn werk kan doen (bijvoorbeeld in een specifiek orgaan).</li>
-  <li>In werkelijkheid wordt de hoeveelheid medicijn in het lichaam in de loop van de tijd
-      kleiner door metabolisering (chemische reacties, vaak in specifieke organen), of doordat
-      de stof in onveranderde vorm wordt afgevoerd (bijvoorbeeld in de urine). Het precieze
-      tempo waarin dit gebeurt is variabel. Het model daarentegen veronderstelt dat de afbraak
-      perfect geleidelijk gebeurt: elke minuut wordt een bepaald percentage van het medicijn
-      afgebroken. Dit is een bruikbare benadering die zorgt dat we kunnen spreken over de
-      "halfwaardetijd" van een medicijn; maar het blijft slechts een benadering.</li>
-  <li>Er is een flinke variabiliteit in de verwerking van medicijnen tussen individuele patienten,
-      zowel door aangeboren (genetische) verschillen als door andere factoren zoals leeftijd,
-      geslacht, en conditie. De "halfwaardetijd" die wordt gegeven voor mensen is slechts een
-      gemiddelde benadering, en wordt ook vaak gegeven met een onder- en bovengrens in plaats
-      van een enkel getal.</li>
+  <li>dag 0: 4 eenheden (de opstartdosering);</li>
+  <li>dag 1: 1 eenheid, dag 2: 2 eenheden, dag 3: 1 eenheid, dag 4: 2 eenheden, enzovoort
+      (de herhaaldoseringen).</li>
 </ul>
 
-<h2>2. Instelbare waarden</h2>
+<h3>1.2. Hoe lang duurt het voordat de hoeveelheid stabiel is?</h3>
 
-<p>Het programma ondersteunt een aantal waarden die kunnen worden ingesteld door de gebruiker.
-   Een veld met een groene achtergrond bevat een geldige waarde; een rode achtergrond betekent
-   dat de waarde niet geldig is. Onder een rood veld staat dan een korte uitleg van wat er mis is.
-   De grafiek wordt alleen bijgewerkt als alle velden geldig zijn.</p>
+<p>Bij een vast herhaalschema groeit de gemiddelde hoeveelheid naar een eindniveau: de paarse lijn. Hoe snel
+   dat gaat, hangt alleen af van de halfwaardetijd. Beginnend bij 0 en zonder opstartdoseringen geldt:</p>
 
-<h3>2.1. Halfwaardetijd medicijn</h3>
+<table class="steady" cellpadding="4">
+  <tr><th>Na</th><th>Bereikt deel van het eindniveau</th></tr>
+  <tr><td>1 halfwaardetijd</td><td>50%</td></tr>
+  <tr><td>2 halfwaardetijden</td><td>75%</td></tr>
+  <tr><td>3 halfwaardetijden</td><td>88%</td></tr>
+  <tr><td>4 halfwaardetijden</td><td>94%</td></tr>
+  <tr><td>5 halfwaardetijden</td><td>97%</td></tr>
+</table>
 
-<p>De halfwaardetijd van het medicijn kan worden ingesteld. Deze wordt uitgedrukt in uren, en beschrijft
-   het tempo waarin het medicijn in het lichaam wordt afgebroken. Na het verstrijken van één halfwaardetijd
-   is nog slechts 50% van het medicijn aanwezig; na twee halfwaardetijden is dat 25%, enzovoort.
-   De halfwaardetijd moet groter zijn dan 0 en is maximaal 10000 uur.</p>
+<p>Na ongeveer 4 tot 5 halfwaardetijden is de hoeveelheid dus vrijwel stabiel. Voor acenocoumarol (11 uur)
+   is dat na ongeveer 2 dagen, voor warfarine (40 uur) na ongeveer 7 tot 8 dagen, en voor fenprocoumon
+   (160 uur) pas na ongeveer 4 tot 5 weken. Met hogere opstartdoseringen kan het eindniveau sneller worden
+   bereikt.</p>
 
-<p>Enkele halfwaardetijden van trombose-medicatie (bron: <em>De kunst van het doseren</em>, Federatie van Nederlandse Trombosediensten, 2024):</p>
+<h2>2. Beperkingen van het model</h2>
+
+<p>Het model kan nuttig inzicht geven in het doseren van medicijnen, maar het is belangrijk om het goed te
+   gebruiken.</p>
+
+<h3>2.1. Wat de grafiek niet laat zien</h3>
+
+<p>De grafiek laat alleen zien hoe de hoeveelheid medicijn in het lichaam in de loop van de tijd varieert.
+   <em>Het is nadrukkelijk geen maat voor het gewenste effect van het medicijn.</em></p>
+
+<p>Bij trombosemedicatie zou het bijvoorbeeld nuttig zijn om te zien hoe de INR-waarde zich ontwikkelt, maar
+   dat is niet wat de grafiek laat zien. De INR wordt wel beïnvloed door de hoeveelheid medicijn in het
+   lichaam, maar hoe dat precies gebeurt is ingewikkeld, met allerlei tussenstappen in de stofwisseling die
+   per medicijn verschillen. Het model dat dit programma gebruikt, is veel te eenvoudig om dat soort effecten
+   te berekenen.</p>
+
+<h3>2.2. Het lichaam is ingewikkelder dan het model</h3>
+
+<p>In het lichaam vinden tegelijk veel processen plaats die met de opname en werking van een medicijn te maken
+   hebben. Het model is juist erg eenvoudig. Enkele verschillen met de werkelijkheid:</p>
+
+<ul>
+  <li>Het model ziet het lichaam als één geheel waarin het medicijn zit. In werkelijkheid komt een medicijn
+      het lichaam binnen via de maag of de bloedbaan, en kost het tijd voordat het op de plek is waar het zijn
+      werk doet (bijvoorbeeld in een bepaald orgaan).</li>
+  <li>In werkelijkheid neemt de hoeveelheid medicijn af door omzetting in het lichaam (metabolisering, vaak in
+      bepaalde organen) of doordat de stof onveranderd wordt uitgescheiden (bijvoorbeeld met de urine). Het
+      tempo daarvan varieert. Het model gaat ervan uit dat de afbraak volkomen gelijkmatig verloopt: elke
+      minuut verdwijnt een vast percentage. Dat is een bruikbare benadering, die het mogelijk maakt om van een
+      "halfwaardetijd" te spreken, maar het blijft een benadering.</li>
+  <li>Patiënten verschillen flink in hoe zij medicijnen verwerken, door aangeboren (genetische) verschillen en
+      door factoren als leeftijd, geslacht en conditie. De halfwaardetijd van een medicijn is daarom een
+      gemiddelde, en wordt vaak gegeven als een bereik in plaats van één getal.</li>
+</ul>
+
+<h2>3. Invoervelden</h2>
+
+<p>Een veld met een groene achtergrond bevat een geldige waarde; een rode achtergrond betekent dat de waarde
+   niet geldig is. Onder een rood veld staat dan een korte uitleg van wat er mis is. De grafiek wordt alleen
+   bijgewerkt als alle velden geldig zijn.</p>
+
+<p>Getallen hoeven geen hele getallen te zijn: anderhalve eenheid kan worden ingevuld als "1,5" of als
+   "1.5".</p>
+
+<h3>3.1. Halfwaardetijd medicijn</h3>
+
+<p>De halfwaardetijd, in uren, beschrijft hoe snel het medicijn in het lichaam wordt afgebroken. Na één
+   halfwaardetijd is nog 50% van het medicijn aanwezig, na twee halfwaardetijden 25%, enzovoort. De
+   halfwaardetijd moet groter zijn dan 0 en is maximaal 10.000 uur.</p>
+
+<p>Halfwaardetijden van enkele trombosemedicijnen (bron: <em>De kunst van het doseren</em>, Federatie van
+   Nederlandse Trombosediensten, 2024):</p>
 
 <ul>
   <li>Acenocoumarol: 8 tot 14 uur; gemiddeld 11 uur.</li>
@@ -617,75 +689,79 @@ select {
   <li>Fenprocoumon: 120 tot 200 uur; gemiddeld 160 uur.</li>
 </ul>
 
-<p>De gemiddelde waarden kunnen ook gekozen worden met de keuzelijst naast het invoerveld.</p>
+<p>De gemiddelde waarden kunnen ook worden gekozen in de keuzelijst naast het invoerveld. Omdat de
+   halfwaardetijd per patiënt verschilt, kan het verhelderend zijn om ook de onder- en bovengrens te
+   proberen.</p>
 
-<h3>2.2. Hoeveelheid werkzame stof in lichaam voor eerste inname</h3>
+<h3>3.2. Hoeveelheid medicijn in lichaam voor eerste inname</h3>
 
-<p>Voor simulatie is het nodig om een beginwaarde te hebben voor de hoeveelheid medicijn in de patient,
-   uitgedrukt in <em>eenheden</em>. Voor patiënten die moeten opstarten is 0 een logische
-   waarde; voor patiënten die eerder het medicijn hebben gebruikt is een waarde groter dan nul
-   beter.</p>
-<p>Voor stabiele, ingeregelde patiënten is de 'gemiddelde hoeveelheid medicijn in het lichaam',
-   die door het programma wordt berekend en getoond op basis van de halfwaardetijd en
-   de herhaal-doseringen, een goede keus.</p>
-<p>De beginwaarde is maximaal 1000000 eenheden.</p>
+<p>De hoeveelheid medicijn die al in het lichaam aanwezig is wanneer de berekening begint, in eenheden. Voor
+   een patiënt die met het medicijn begint, is 0 de logische waarde. Voor een patiënt die het medicijn al
+   eerder gebruikte, is een waarde groter dan 0 beter.</p>
 
-<h3>2.3. Opstart-doseringen</h3>
+<p>Voor een stabiele, ingeregelde patiënt is de berekende "gemiddelde hoeveelheid medicijn in lichaam na
+   inregelen" (zie 4.2) een goede keuze.</p>
 
-<p>De opstart-doseringen worden gegeven als een lijst van getallen, gescheiden door een min-teken.
-   Getallen hoeven geen hele getallen te zijn; een dosis van anderhalve eenheid kan bijvoorbeeld worden
-   gegeven als "1.5" of als "1,5". Elke dosis is maximaal 1000000 eenheden.</p>
-<p>Het is mogelijk om een leeg opstart-schema te geven; in dat geval wordt meteen begonnen met het
-   herhaal-doseringen schema.</p>
+<p>De waarde is maximaal 1.000.000 eenheden.</p>
 
-<h3>2.4. Herhaal-doseringen</h3>
+<h3>3.3. Opstartdoseringen</h3>
 
-<p>Nadat de opstart-doseringen allemaal zijn gegeven wordt een repeterend herhaal-schema aangehouden.
-   Deze wordt op dezelfde manier beschreven als het opstart-schema: een lijst van getallen,
-   gescheiden door min-tekens. Het verschil met het opstart-schema is dat het herhaal-schema wordt
-   herhaald.</p>
-<p>Het is mogelijk om een leeg herhaal-schema te geven; in dat geval wordt na de opstart-periode
-   gestopt met het innemen van het medicijn; ofwel, de dagelijkse dosering wordt nul.</p>
+<p>De doseringen voor de eerste dagen, als een lijst van getallen gescheiden door een minteken: de eerste
+   waarde is de dosis op dag 0, de tweede die op dag 1, enzovoort. "4-3" betekent bijvoorbeeld: 4 eenheden
+   op dag 0 en 3 eenheden op dag 1. Elke dosis is maximaal 1.000.000 eenheden.</p>
 
-<h3>2.5. Grafiek start- en eindtijd</h3>
+<p>Het veld mag leeg blijven; dan wordt meteen met de herhaaldoseringen begonnen.</p>
 
-<p>Het programma toont een grafiek. De begin- en eindtijd bepaalt het bereik van de horizontale (tijd)
-   as van de grafiek. De eindtijd is maximaal 500 etmalen, en moet groter zijn dan de begintijd.</p>
-<p>Door met de muis over de grafiek te bewegen worden het tijdstip en de hoeveelheid medicijn op dat
-   moment getoond.</p>
+<h3>3.4. Herhaaldoseringen</h3>
 
-<h2>3. Berekende waarden</h2>
+<p>Na de opstartdoseringen volgt het herhaalschema. Dit wordt op dezelfde manier ingevuld: een lijst van
+   getallen gescheiden door mintekens. Het verschil is dat het herhaalschema steeds opnieuw wordt
+   doorlopen. "1-2" betekent bijvoorbeeld: afwisselend 1 en 2 eenheden per dag.</p>
 
-<p>Bij iedere wijziging aan een invoerveld berekent het programma enkele waarden.</p>
+<p>Ook dit veld mag leeg blijven; dan stopt de inname na de opstartperiode.</p>
 
-<h3>3.1. Gemiddelde herhaal-dosering</h3>
+<h3>3.5. Grafiek begin- en eindtijd</h3>
 
-<p>Deze waarde is het gemiddelde van de herhaal-doseringen.</p>
+<p>De begin- en eindtijd, in etmalen, bepalen welk deel van de tijd de grafiek laat zien. De eindtijd moet
+   groter zijn dan de begintijd en is maximaal 500 etmalen.</p>
 
-<h3>3.2. Gemiddelde hoeveelheid medicijn in lichaam na inregelen</h3>
+<p>Deze velden veranderen alleen het beeld: de berekening begint altijd op dag 0. Met een begintijd van
+   bijvoorbeeld 20 ziet u de situatie vanaf dag 20, inclusief het effect van alle eerdere innames.</p>
 
-<p>Deze waarde is de gemiddelde hoeveelheid medicijn in het lichaam als de patiënt volledig
-   is ingeregeld en zich aan het herhaal-schema houdt. Deze wordt berekend aan de hand van de
-   gemiddelde dosering en de halfwaardetijd, op basis van de volgende formule:</p>
+<p>Door met de muis over de grafiek te bewegen, ziet u de hoeveelheid medicijn op elk moment.</p>
 
-<code>gemiddelde_hoeveelheid_medicijn_in_lichaam = gemiddelde_herhaal_dosering_per_etmaal * (halfwaardetijd_in_uren / 24) / log(2)</code>
+<h2>4. Berekende waarden</h2>
 
-<p>Hierin is log(2) gelijk aan de natuurlijke logaritme van 2: log(2) ≈ 0.693147.</p>
+<p>Bij elke wijziging berekent het programma de volgende waarden.</p>
 
-<p>In de praktijk is de volgende vorm van de formule handig:</p>
+<h3>4.1. Gemiddelde herhaaldosering</h3>
 
-<code>gemiddelde_hoeveelheid_medicijn_in_lichaam = gemiddelde_herhaal_dosering_per_etmaal * halfwaardetijd_in_uren / 16.6355</code>
+<p>Het gemiddelde van de herhaaldoseringen. Bij "1-2" is dat 1,5 eenheid per etmaal.</p>
 
-<p>In de grafiek wordt deze waarde getoond als een paarse horizontale lijn.</p>
+<h3>4.2. Gemiddelde hoeveelheid medicijn in lichaam na inregelen</h3>
 
-<h2>4. Dupliceren en bewaren</h2>
+<p>De gemiddelde hoeveelheid medicijn in het lichaam wanneer de patiënt volledig is ingeregeld en zich aan het
+   herhaalschema houdt. In de grafiek is dit de paarse horizontale lijn.</p>
 
-<p>De knop "Dupliceren" (of Ctrl+D) opent een nieuw tabblad met dezelfde instellingen, zodat
-   verschillende schema's naast elkaar vergeleken kunnen worden.</p>
-<p>De instellingen worden ook opgeslagen in het adres van de pagina (het deel na het '#'-teken).
-   Door een bladwijzer te maken, of het adres te kopiëren, kan een schema later opnieuw worden geopend.</p>
-</div>
-</template>
+<p>Het is een <em>gemiddelde</em>: de werkelijke hoeveelheid schommelt eromheen. Vlak na een inname ligt de
+   hoeveelheid erboven, vlak voor de volgende inname eronder.</p>
+
+<p>De waarde wordt berekend met de formule:</p>
+
+<blockquote class="formula">gemiddelde hoeveelheid = gemiddelde dosering per etmaal × halfwaardetijd (uren) ÷ 16,64</blockquote>
+
+<p>Hierin is 16,64 gelijk aan 24 × ln(2), waarbij ln(2) ≈ 0,693 de natuurlijke logaritme van 2 is.</p>
+
+<p>Voorbeeld met de standaardinstellingen: 1,5 eenheid per etmaal × 160 uur ÷ 16,64 ≈ 14,4 eenheden.</p>
+
+<h2>5. Dupliceren en bewaren</h2>
+
+<p>De knop "Dupliceren" (of Ctrl+D) opent een nieuw tabblad met dezelfde instellingen, zodat verschillende
+   schema's naast elkaar kunnen worden vergeleken.</p>
+
+<p>De instellingen worden ook opgeslagen in het adres van de pagina (het deel na het #-teken). Door een
+   bladwijzer te maken of het adres te kopiëren, kunt u een schema later opnieuw openen.</p>
+</section>
 
 <!-- ======================================================================
      4. JAVASCRIPT
@@ -740,16 +816,15 @@ const URL_KEYS = {
 // =========================================================================
 
 /**
- * Format a number for display, like fmt() in the Python app: whole numbers
- * without decimals, others with at most 3 decimals and no trailing zeros.
- * (Unlike the Python version, this also drops a trailing '.', so that
- * e.g. 2.0004 shows as "2" instead of "2.".)
+ * Format a number for display with a decimal comma, like fmt() in
+ * model.py: whole numbers without decimals, others with at most 3 decimals
+ * and no trailing zeros (e.g. 3, 2,5, 23,084; 2.0004 shows as "2").
  */
 function fmt(x) {
   if (Number.isInteger(x)) {
     return String(x);
   }
-  return x.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+  return x.toFixed(3).replace(/0+$/, "").replace(/\.$/, "").replace(".", ",");
 }
 
 /**
@@ -765,9 +840,15 @@ function roundHalfEven(x) {
   return r;
 }
 
-/** Format a tick label without floating-point noise (0.30000000000000004). */
+/** Write a whole number the Dutch way, with dots between thousands (10.000). */
+function formatThousands(n) {
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+/** Format a tick label with a decimal comma, without floating-point noise
+ *  (0.30000000000000004 becomes 0,3). */
 function formatTick(v) {
-  return String(Number(v.toPrecision(12)));
+  return String(Number(v.toPrecision(12))).replace(".", ",");
 }
 
 // =========================================================================
@@ -897,15 +978,15 @@ function explainBadNumber(text) {
 /** Explain why a text is not a valid '-'-separated list of numbers. */
 function explainBadList(text) {
   if (text.startsWith("-")) {
-    return "De lijst mag niet beginnen met een min-teken.";
+    return "De lijst mag niet beginnen met een minteken.";
   }
   if (text.endsWith("-")) {
-    return "De lijst mag niet eindigen met een min-teken.";
+    return "De lijst mag niet eindigen met een minteken.";
   }
   if (text.includes("--")) {
-    return "Er staan twee min-tekens achter elkaar.";
+    return "Er staan twee mintekens achter elkaar.";
   }
-  return "Gebruik getallen gescheiden door een min-teken, bijvoorbeeld 1-2-1,5.";
+  return "Gebruik getallen gescheiden door een minteken, bijvoorbeeld 1-2-1,5.";
 }
 
 /** Parse a single number. */
@@ -1362,11 +1443,11 @@ function readSettings(texts) {
   // The upper limits also prevent numbers so large that they overflow.
   const checkHalflife = x =>
     !(x > 0.0) ? "De halfwaardetijd moet groter zijn dan 0." :
-    (x > MAX_HALFLIFE_HOURS) ? `Maximaal ${MAX_HALFLIFE_HOURS} uur.` : null;
+    (x > MAX_HALFLIFE_HOURS) ? `Maximaal ${formatThousands(MAX_HALFLIFE_HOURS)} uur.` : null;
   const checkAmount = x =>
-    (x <= MAX_AMOUNT) ? null : `Maximaal ${MAX_AMOUNT} eenheden.`;
+    (x <= MAX_AMOUNT) ? null : `Maximaal ${formatThousands(MAX_AMOUNT)} eenheden.`;
   const checkDoses = list =>
-    list.every(x => x <= MAX_AMOUNT) ? null : `Elke dosis mag maximaal ${MAX_AMOUNT} eenheden zijn.`;
+    list.every(x => x <= MAX_AMOUNT) ? null : `Elke dosis mag maximaal ${formatThousands(MAX_AMOUNT)} eenheden zijn.`;
   const checkGraphEnd = x =>
     (x <= MAX_GRAPH_END_DAYS) ? null : `Maximaal ${MAX_GRAPH_END_DAYS} etmalen.`;
 
@@ -1382,8 +1463,8 @@ function readSettings(texts) {
   // The start time must lie before the end time; if not, both are invalid.
   const start = results.graphStart, end = results.graphEnd;
   if (start.value !== null && end.value !== null && !(start.value < end.value)) {
-    results.graphStart = { value: null, error: "De start-tijd moet kleiner zijn dan de eind-tijd." };
-    results.graphEnd   = { value: null, error: "De eind-tijd moet groter zijn dan de start-tijd." };
+    results.graphStart = { value: null, error: "De begintijd moet kleiner zijn dan de eindtijd." };
+    results.graphEnd   = { value: null, error: "De eindtijd moet groter zijn dan de begintijd." };
   }
 
   const values = {}, errors = {};
@@ -1467,18 +1548,41 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-// ---- Uitleg: open the manual (section 3) in a new tab ---------------------
-// The manual is turned into a separate page held in memory (a "blob"), and
-// the link points at it. This works without any extra files.
-(function setUpManualLink() {
-  const manualBody = document.getElementById("manual").innerHTML;
-  const page = "<!DOCTYPE html><html lang=\"nl\"><head><meta charset=\"utf-8\">" +
-               "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
-               "<title>Uitleg — Basic Medicine Halflife Model</title></head><body>" +
-               manualBody + "</body></html>";
-  const blob = new Blob([page], { type: "text/html;charset=utf-8" });
-  document.getElementById("manual-link").href = URL.createObjectURL(blob);
-})();
+// ---- Tabs: switch between "Berekening" and "Uitleg" ----------------------
+const tabs = [...document.querySelectorAll('.tabs [role="tab"]')];
+
+/** Show the panel of `tab` and hide the others. */
+function selectTab(tab) {
+  for (const t of tabs) {
+    const selected = (t === tab);
+    t.setAttribute("aria-selected", String(selected));
+    t.tabIndex = selected ? 0 : -1;   // only the active tab is in the Tab order
+    document.getElementById(t.getAttribute("aria-controls")).hidden = !selected;
+  }
+  window.scrollTo(0, 0);
+  // "Dupliceren" is only shown on the "Berekening" tab.
+  document.getElementById("duplicate-button").hidden = (tab.id !== "tab-calc");
+  // The graph cannot be drawn while its tab is hidden (it has no size then),
+  // so redraw it as soon as it is visible again.
+  if (tab.id === "tab-calc") {
+    drawGraph();
+    drawHover();
+  }
+}
+
+for (const tab of tabs) {
+  tab.addEventListener("click", () => selectTab(tab));
+  // Left/right arrow keys move between tabs (standard tab-bar behaviour).
+  tab.addEventListener("keydown", (event) => {
+    const step = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+    if (step) {
+      const next = tabs[(tabs.indexOf(tab) + step + tabs.length) % tabs.length];
+      selectTab(next);
+      next.focus();
+      event.preventDefault();
+    }
+  });
+}
 
 // ---- Half-life presets -----------------------------------------------------
 const presetSelect = document.getElementById("halflife-preset");

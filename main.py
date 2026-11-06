@@ -16,6 +16,7 @@ from pathlib import Path
 import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvas
 from matplotlib.figure import Figure
+from matplotlib.ticker import FuncFormatter
 from PySide6.QtCore import Qt, QPoint
 from PySide6.QtGui import QPalette, QColor, QAction, QKeySequence
 from PySide6.QtWidgets import (QApplication, QComboBox, QLabel, QLineEdit, QMainWindow, QTabWidget,
@@ -140,14 +141,14 @@ class CalculationsWidget(QWidget):
         rows += field_rows("halflife", "Halfwaardetijd medicijn",
                            hbox_layout("uren", self.preset_combobox, "*stretch*"))
         rows += field_rows("start_amount", "Hoeveelheid medicijn in lichaam voor eerste inname", "eenheden")
-        rows += field_rows("startup_dosages", "Opstart-doseringen", "eenheden per etmaal")
-        rows += field_rows("repeat_dosages", "Herhaal-doseringen", "eenheden per etmaal")
-        rows += field_rows("graph_start", "Grafiek start-tijd", "etmalen")
-        rows += field_rows("graph_end", "Grafiek eind-tijd", "etmalen")
+        rows += field_rows("startup_dosages", "Opstartdoseringen", "eenheden per etmaal")
+        rows += field_rows("repeat_dosages", "Herhaaldoseringen", "eenheden per etmaal")
+        rows += field_rows("graph_start", "Grafiek begintijd", "etmalen")
+        rows += field_rows("graph_end", "Grafiek eindtijd", "etmalen")
         rows += [
             [""],
             ["<b>Berekende waarden</b>"],
-            ["  Gemiddelde herhaal-dosering", self.repeat_dosages_mean_widget, "eenheden per etmaal"],
+            ["  Gemiddelde herhaaldosering", self.repeat_dosages_mean_widget, "eenheden per etmaal"],
             ["  Gemiddelde hoeveelheid medicijn in lichaam na inregelen",
              self.repeat_dosages_equilibrium_widget, "eenheden"],
             [""],
@@ -174,6 +175,10 @@ class CalculationsWidget(QWidget):
         self.axes.set_xlabel("tijd [etmalen]", fontsize="small")
         self.axes.set_ylabel("hoeveelheid medicijn in lichaam [eenheden]", fontsize="small")
         self.axes.grid()
+        # Tick labels with a decimal comma (2,5 instead of 2.5).
+        tick_formatter = FuncFormatter(lambda value, position: model.fmt_tick(value))
+        self.axes.xaxis.set_major_formatter(tick_formatter)
+        self.axes.yaxis.set_major_formatter(tick_formatter)
         # Empty axes until the first valid input (same range as the web version).
         self.axes.set_xlim(0.0, 30.0)
         self.axes.set_ylim(0.0, 1.0)

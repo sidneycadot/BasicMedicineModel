@@ -57,13 +57,25 @@ class SimulationSettings(NamedTuple):
 # ---------------------------------------------------------------------------
 
 def fmt(x: float) -> str:
-    """Format a number: whole numbers without decimals, others with at most
-    3 decimals and no trailing zeros (e.g. 3, 2.5, 23.084)."""
+    """Format a number for display, with a decimal comma: whole numbers
+    without decimals, others with at most 3 decimals and no trailing zeros
+    (e.g. 3, 2,5, 23,084)."""
     if x.is_integer():
         return str(int(x))
     s = f"{x:.3f}".rstrip("0")
     # A value like 2.0004 gives "2.000", which is now "2."; drop the dot.
-    return s.rstrip(".")
+    return s.rstrip(".").replace(".", ",")
+
+
+def fmt_tick(x: float) -> str:
+    """Format a graph tick label with a decimal comma, without
+    floating-point noise (0.30000000000000004 becomes 0,3)."""
+    return f"{x:.12g}".replace(".", ",")
+
+
+def format_thousands(n: int) -> str:
+    """Write a whole number the Dutch way, with dots between thousands (10.000)."""
+    return f"{n:,}".replace(",", ".")
 
 
 def describe_time(days: float) -> str:
@@ -192,12 +204,12 @@ def _explain_bad_number(text: str) -> str:
 
 def _explain_bad_list(text: str) -> str:
     if text.startswith("-"):
-        return "De lijst mag niet beginnen met een min-teken."
+        return "De lijst mag niet beginnen met een minteken."
     if text.endswith("-"):
-        return "De lijst mag niet eindigen met een min-teken."
+        return "De lijst mag niet eindigen met een minteken."
     if "--" in text:
-        return "Er staan twee min-tekens achter elkaar."
-    return "Gebruik getallen gescheiden door een min-teken, bijvoorbeeld 1-2-1,5."
+        return "Er staan twee mintekens achter elkaar."
+    return "Gebruik getallen gescheiden door een minteken, bijvoorbeeld 1-2-1,5."
 
 
 def parse_float(text: str, check: Check = lambda x: None):
@@ -219,20 +231,20 @@ def parse_float_list(text: str, check: Check = lambda x: None):
 
 
 def _max_amount(x: float) -> Optional[str]:
-    return None if x <= MAX_AMOUNT else f"Maximaal {MAX_AMOUNT} eenheden."
+    return None if x <= MAX_AMOUNT else f"Maximaal {format_thousands(MAX_AMOUNT)} eenheden."
 
 
 def _max_dose(doses: list[float]) -> Optional[str]:
     if all(x <= MAX_AMOUNT for x in doses):
         return None
-    return f"Elke dosis mag maximaal {MAX_AMOUNT} eenheden zijn."
+    return f"Elke dosis mag maximaal {format_thousands(MAX_AMOUNT)} eenheden zijn."
 
 
 def _check_halflife(x: float) -> Optional[str]:
     if not x > 0.0:
         return "De halfwaardetijd moet groter zijn dan 0."
     if x > MAX_HALFLIFE_HOURS:
-        return f"Maximaal {MAX_HALFLIFE_HOURS} uur."
+        return f"Maximaal {format_thousands(MAX_HALFLIFE_HOURS)} uur."
     return None
 
 
@@ -259,8 +271,8 @@ def validate(texts: dict[str, str]) -> tuple[dict, dict]:
     # The start time must lie before the end time; if not, both are invalid.
     start, end = results["graph_start"][0], results["graph_end"][0]
     if start is not None and end is not None and not start < end:
-        results["graph_start"] = (None, "De start-tijd moet kleiner zijn dan de eind-tijd.")
-        results["graph_end"] = (None, "De eind-tijd moet groter zijn dan de start-tijd.")
+        results["graph_start"] = (None, "De begintijd moet kleiner zijn dan de eindtijd.")
+        results["graph_end"] = (None, "De eindtijd moet groter zijn dan de begintijd.")
 
     values = {key: value for key, (value, error) in results.items()}
     errors = {key: error for key, (value, error) in results.items()}
