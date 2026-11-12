@@ -27,8 +27,8 @@ MAX_AMOUNT = 1000000        # largest allowed start amount or dose, in units
 DEFAULT_TEXTS = {
     "halflife":        "160",
     "start_amount":    "0",
-    "startup_dosages": "4",
-    "repeat_dosages":  "1-2",
+    "startup_dosages": "4-2-1",
+    "repeat_dosages":  "1-0.5-0.5",
     "graph_start":     "0",
     "graph_end":       "30",
 }
